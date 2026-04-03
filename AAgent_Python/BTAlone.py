@@ -46,6 +46,7 @@ class BN_DoNothing(pt.behaviour.Behaviour):
     
     def terminate(self, new_status: common.Status):
         # Finishing the behaviour, therefore we have to stop the associated task
+        print("Terminate DoNothing")
         if self.my_goal!=None:
             self.my_goal.cancel()
 
@@ -70,7 +71,6 @@ class BN_CheckInventory(pt.behaviour.Behaviour):
         inventory=self.my_agent.i_state.myInventoryList
 
         for _, value in enumerate(inventory):
-            print(value)
             if value["name"] != "AlienFlower":
                 continue
 
@@ -86,22 +86,30 @@ class BN_CheckInventory(pt.behaviour.Behaviour):
     def terminate(self, new_status: common.Status) -> None:
         pass
 """
-WIP
+To Test
 Returns to base via Walk_to navMesh action.
+Currently only walks to the Alpha base, later on we can make it walk to the nearest base.
 """
 class BN_ReturnToBase(pt.behaviour.Behaviour):
     def __init__(self, aagent):
         self.my_goal = None
         super(BN_ReturnToBase, self).__init__("BN_ReturnToBase")
         self.my_agent = aagent
+        self.debug_current_state=None
 
     def initialise(self) -> None:
-        pass
+        self.my_goal= asyncio.create_task(Goals_BT_Basic.Walk_To(self.my_agent,"BaseAlpha").run())
 
     def update(self) -> pt.common.Status:
-        raise NotImplementedError("This method is yet to be implemented")
-
+        #TODO remove temp
+        temp= common_goal_update(self.my_goal)
+        if temp!= self.debug_current_state:
+            self.debug_current_state=temp
+            print("Return To Base:",temp)
+        return temp
+    
     def terminate(self, new_status: common.Status) -> None:
+        print("Terminate ReturnToBase")
         if self.my_goal != None:
             self.my_goal.cancel()
 
@@ -116,9 +124,9 @@ class BN_DropOffFlowers(pt.behaviour.Behaviour):
 
     def update(self) -> common.Status:
         return common_goal_update(self.my_goal)
-        
 
     def terminate(self, new_status: common.Status) -> None:
+        print("Terminate DropOffFlowers")
         if self.my_goal!=None:
             self.my_goal.cancel()
     
@@ -142,11 +150,9 @@ class BN_DetectFlower(pt.behaviour.Behaviour):
             if value:  # there is a hit with an object
                 if value["tag"] == "AlienFlower":  # If it is a flower
                     # print("Flower detected!")
-                    print("BN_DetectFlower completed with SUCCESS")
 
                     return pt.common.Status.SUCCESS
         # print("No flower...")
-        #print("BN_DetectFlower completed with FAILURE")
         return pt.common.Status.FAILURE
 
     def terminate(self, new_status: common.Status):
@@ -154,13 +160,14 @@ class BN_DetectFlower(pt.behaviour.Behaviour):
 
 '''Turns towards a flower and then moves forward until it hits something'''
 class BN_MoveToFlower(pt.behaviour.Behaviour):
+
     def __init__(self, aagent):
         self.turn_degrees=9 # Ideally should be the degrees between each ray
         self.forward_movement=5 #Ideally should be ray length
         self.my_goal = None
         super(BN_MoveToFlower, self).__init__("BN_MoveToFlower")
         self.my_agent = aagent
-
+        self.debug_current_state=None #DEBUGING var
 
     def initialise(self):
         print("BN_MoveToFlower Intializing")
@@ -172,87 +179,76 @@ class BN_MoveToFlower(pt.behaviour.Behaviour):
                     
                     #Flower's straight ahead
                     if index == 2:
-                        print("Flower forward")
+                       #print("Flower forward")
                         self.my_goal = asyncio.create_task(Goals_BT_Basic.ForwardDist(self.my_agent,self.forward_movement,0,5).run())
 
                     #Flower's to your left
                     if index < 2:
-                        print(f"Flower left index: {index}")
+                       #print(f"Flower left index: {index}")
                         self.my_goal = asyncio.create_task(Goals_BT_Basic.Turn_customizable(self.my_agent,-1,(index+1)*self.turn_degrees).run())
                     
                     #Flower's to your right
                     if index > 2:
-                        print(f"Flower right index: {index}")
+                       #print(f"Flower right index: {index}")
                         self.my_goal = asyncio.create_task(Goals_BT_Basic.Turn_customizable(self.my_agent,1,(index+1)*self.turn_degrees).run())
                     break
                 
-
     def update(self):
-        return common_goal_update(self.my_goal)
+        #TODO remove temp
+        temp= common_goal_update(self.my_goal)
+        if temp!= self.debug_current_state:
+            self.debug_current_state=temp
+            print("Move To Flower:",temp)
+        return temp
+
 
     def terminate(self, new_status: common.Status):
-        print("Terminate BN_MoveToFlower")
+        print("Terminate BN_MoveToFlower STATUS:",new_status)
         self.logger.debug("Terminate BN_MoveToFlower")
         if self.my_goal!= None:
             self.my_goal.cancel()
+            print("Canceling Goal")
+        
 
 ###### Roaming BNs Don't Touch Much #######
 
 class BN_ForwardRandom(pt.behaviour.Behaviour):
     def __init__(self, aagent):
         self.my_goal = None
-        # print("Initializing BN_ForwardRandom")
+        #print("Initializing BN_ForwardRandom")
         super(BN_ForwardRandom, self).__init__("BN_ForwardRandom")
         self.logger.debug("Initializing BN_ForwardRandom")
         self.my_agent = aagent
 
     def initialise(self):
-        print("BN_ForwardRandom Initialize")
+       #print("BN_ForwardRandom Initialize")
         self.logger.debug("Create Goals_BT.ForwardDist task")
         self.my_goal = asyncio.create_task(Goals_BT_Basic.ForwardDist(self.my_agent, -1, 1, 5).run())
 
     def update(self):
-        if not self.my_goal.done():
-            return pt.common.Status.RUNNING
-        else:
-            if self.my_goal.result():
-                self.logger.debug("BN_ForwardRandom completed with SUCCESS")
-                # print("BN_ForwardRandom completed with SUCCESS")
-                return pt.common.Status.SUCCESS
-            else:
-                self.logger.debug("BN_ForwardRandom completed with FAILURE")
-                # print("BN_ForwardRandom completed with FAILURE")
-                return pt.common.Status.FAILURE
-
+        return common_goal_update(self.my_goal)
+    
     def terminate(self, new_status: common.Status):
         # Finishing the behaviour, therefore we have to stop the associated task
+        print("Terminate BN_ForwardRandom")
         self.logger.debug("Terminate BN_ForwardRandom")
-        self.my_goal.cancel()
+        if self.my_goal != None:
+            self.my_goal.cancel()
 
 
 class BN_TurnRandom(pt.behaviour.Behaviour):
     def __init__(self, aagent):
         self.my_goal = None
-        # print("Initializing BN_TurnRandom")
+        #print("Initializing BN_TurnRandom")
         super(BN_TurnRandom, self).__init__("BN_TurnRandom")
         self.my_agent = aagent
 
     def initialise(self):
-        print("BN_TurnRandom Intialize")
-        self.my_goal = asyncio.create_task(Goals_BT_Basic.Turn(self.my_agent).run())
+       #print("BN_TurnRandom Intialize")
+        self.my_goal = asyncio.create_task(Goals_BT_Basic.Turn_customizable(self.my_agent,random.choice([-1,1]),random.uniform(0,180)).run())
 
     def update(self):
-        if not self.my_goal.done():
-           # print("BN_TurnRandom RUNNING")
-            return pt.common.Status.RUNNING
-        else:
-            res = self.my_goal.result()
-            if res:
-                print("BN_TurnRandom completed with SUCCESS")
-                return pt.common.Status.SUCCESS
-            else:
-                print("BN_TurnRandom completed with FAILURE")
-                return pt.common.Status.FAILURE
+       return common_goal_update(self.my_goal)
 
     def terminate(self, new_status: common.Status):
         # Finishing the behaviour, therefore we have to stop the associated task
@@ -267,7 +263,7 @@ class BN_TurnRandom(pt.behaviour.Behaviour):
 class BN_DetectFrozen(pt.behaviour.Behaviour):  
     def __init__(self, aagent):      
         self.my_goal = None      
-          # print("Initializing BN_DetectInventoryFull")      
+          #print("Initializing BN_DetectInventoryFull")      
         super(BN_DetectFrozen, self).__init__("BN_DetectFrozen")
         self.my_agent = aagent
         self.i_state = aagent.i_state
@@ -294,18 +290,31 @@ class BTAlone:
         
         # Detect the flower, once detected turn towards it, once facing it move forward
         flower_protocol = pt.composites.Sequence(name="MoveToFlower", memory=True)
-        flower_protocol.add_children([BN_DetectFlower(aagent),BN_MoveToFlower(aagent)]) #TODO Check if this needs a DoNothing at the end and if so why
-        
-        #TODO Check inventory when 2 return to base
+        flower_protocol.add_children([
+                                        BN_DetectFlower(aagent),
+                                        BN_MoveToFlower(aagent),
+                                        ]) 
+        #Check inventory when 2 return to base
         return_to_base= pt.composites.Sequence(name="ReturnToBase",memory=False)
-        return_to_base.add_children([BN_CheckInventory(aagent)])#,BN_ReturnToBase(aagent),BN_DropOffFlowers(aagent)])
+        return_to_base.add_children([
+                                        BN_CheckInventory(aagent),
+                                        BN_ReturnToBase(aagent),
+                                        BN_DropOffFlowers(aagent),
+                                     ])
 
         #TODO, idk if neccesary, improve roaming
         roaming = pt.composites.Parallel(name="Parallel", policy=py_trees.common.ParallelPolicy.SuccessOnAll())
-        roaming.add_children([BN_ForwardRandom(aagent), BN_TurnRandom(aagent)])
+        roaming.add_children([
+                                BN_ForwardRandom(aagent), 
+                                BN_TurnRandom(aagent)
+                              ])
 
         false_root = pt.composites.Selector(name="Selector", memory=False)
-        false_root.add_children([return_to_base,flower_protocol, roaming])
+        false_root.add_children([
+                                    return_to_base,
+                                    flower_protocol,
+                                    roaming
+                                    ])
         
 
         self.root = pt.composites.Selector(name="Selector", memory=False)

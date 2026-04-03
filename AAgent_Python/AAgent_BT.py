@@ -1,3 +1,4 @@
+import random # TODO check if we can add this, it has been add
 import sys
 from collections import deque
 
@@ -159,7 +160,7 @@ class AAgent:
             "DoNothing": Goals_BT_Basic.DoNothing(self),
             "ForwardStop": Goals_BT_Basic.ForwardStop(self),
             "ForwardDist": Goals_BT_Basic.ForwardDist(self, -1, 5, 10),
-            "Turn": Goals_BT_Basic.Turn(self)
+            "Turn": Goals_BT_Basic.Turn_customizable(self,random.choice([-1,1]),random.uniform(0,180)) # TODO check if we can modify this, it has been modified but it results in the same behaviour
         }
 
         # Reference to the possible behaviour trees the agent can execute

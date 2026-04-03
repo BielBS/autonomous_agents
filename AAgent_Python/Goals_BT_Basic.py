@@ -103,10 +103,11 @@ class ForwardDist:
                     # If we are moving
                     await asyncio.sleep(0.5)  # Wait for a little movement
                     current_dist = calculate_distance(self.starting_pos, self.i_state.position)
-                    # print(f"Current distance: {current_dist}")
+                    #print(f"Current distance: {current_dist}")
                     if current_dist >= self.target_dist:  # Check if we already have covered the required distance
                         await self.a_agent.send_message("action", "ntm")
                         self.state = self.STOPPED
+                        # print("DESTINATION REACHED")
                         return True
                     elif previous_dist == current_dist:  # We are not moving
                         # print(f"previous dist: {previous_dist}, current dist: {current_dist}")
@@ -123,75 +124,26 @@ class ForwardDist:
             await self.a_agent.send_message("action", "ntm")
             self.state = self.STOPPED
 
-class Turn:
-    """
-    Repeats the action of turning a random number of degrees in a random
-    direction (right or left)
-    """
-    LEFT = -1
-    RIGHT = 1
-
-    SELECTING = 0
-    TURNING = 1
-
-    def __init__(self, a_agent):
-        self.a_agent = a_agent
-        self.rc_sensor = a_agent.rc_sensor
-        self.i_state = a_agent.i_state
-
-        self.current_heading = 0
-        self.new_heading = 0
-
-        self.state = self.SELECTING
-
-    async def run(self):
-        try:
-            while True:
-                if self.state == self.SELECTING:
-                    # print("SELECTING NEW TURN")
-                    rotation_direction = random.choice([-1, 1])
-                    # print(f"Rotation direction: {rotation_direction}")
-                    rotation_degrees = random.uniform(1, 180) * rotation_direction
-                    # print("Degrees: " + str(rotation_degrees))
-                    current_heading = self.i_state.rotation["y"]
-                    # print(f"Current heading: {current_heading}")
-                    self.new_heading = (current_heading + rotation_degrees) % 360
-                    if self.new_heading == 360:
-                        self.new_heading = 0.0
-                    # print(f"New heading: {self.new_heading}")
-                    if rotation_direction == self.RIGHT:
-                        await self.a_agent.send_message("action", "tr")
-                    else:
-                        await self.a_agent.send_message("action", "tl")
-                    self.state = self.TURNING
-                elif self.state == self.TURNING:
-                    # check if we have finished the rotation
-                    current_heading = self.i_state.rotation["y"]
-                    final_condition = abs(current_heading - self.new_heading)
-                    if final_condition < 5:
-                        await self.a_agent.send_message("action", "nt")
-                        current_heading = self.i_state.rotation["y"]
-                        # print(f"Current heading: {current_heading}")
-                        # print("TURNING DONE.")
-                        self.state = self.SELECTING
-                        return True
-                await asyncio.sleep(0)
-        except asyncio.CancelledError:
-            print("***** TASK Turn CANCELLED")
-            await self.a_agent.send_message("action", "nt")
-
-
+# I have DELETED the given Turn class, the Turn_customizable class is it's replacement it does the same thing but instead of using random values it uses given ones
+# to recreate the previous class simply create a Turn_customaizable(a_agent,random.choice([-1,1]),random.uniform(1,180))
 ########## New Goals from here downward #########
 
 class Turn_customizable:
     """
     The action of turning a given set of degrees in a given direction (right or left)
+    
+    Possible BUG:Sometimes it keeps truning over and over, probably because it skips over the desired heading and does another full turn
+        Added TURN_THRESHOLD instead of magic number and changed it from 5 to 10, in an attempt to fix it
+    
     """
     LEFT = -1
     RIGHT = 1
 
     SELECTING = 0
     TURNING = 1
+
+    TURN_THRESHOLD=10
+
 
     def __init__(self, a_agent,direction,degrees):
         self.a_agent = a_agent
@@ -230,7 +182,7 @@ class Turn_customizable:
                     # check if we have finished the rotation
                     current_heading = self.i_state.rotation["y"]
                     final_condition = abs(current_heading - self.new_heading)
-                    if final_condition < 5:
+                    if final_condition < self.TURN_THRESHOLD:
                         await self.a_agent.send_message("action", "nt")
                         current_heading = self.i_state.rotation["y"]
                         # print(f"Current heading: {current_heading}")
@@ -243,6 +195,8 @@ class Turn_customizable:
             await self.a_agent.send_message("action", "nt")
 
 
+from AAgent_BT import AAgent
+
 """
 WIP
 Teleports to a given destination
@@ -250,15 +204,43 @@ Teleports to a given destination
 class Teleport_To:
 
 
-    def __init__(self,a_agent,destination) -> None:
+    def __init__(self,a_agent:AAgent,destination:str) -> None:
         self.a_agent=a_agent
         self.destination=destination
 
     async def run(self):
-       pass
+        try:
+            await self.a_agent.send_message("action","teleport_to," + self.destination)
+        except asyncio.CancelledError:
+            print("***** TASK Teleport_To CANCELLED")
+            await self.a_agent.send_message("action", "stop")
 
 
-from AAgent_BT import AAgent
+"""
+WIP
+Walks to a given destination using the navMesh
+"""
+class Walk_To:
+
+    VALID_LOCATIONS=["BaseAlpha","BaseBeta","BaseGamma","BaseDelta"]
+
+    def __init__(self,a_agent:AAgent,destination:str) -> None:
+        self.a_agent=a_agent
+        self.destination=destination
+
+    async def run(self):
+        try:
+            await self.a_agent.send_message("action","stop") #Just in case
+            while True:
+                await self.a_agent.send_message("action","walk_to," + self.destination)
+                if self.a_agent.i_state.currentNamedLoc == self.destination:
+                    await self.a_agent.send_message("action","stop") #Just in case
+                    return True
+        except asyncio.CancelledError:
+            print("***** TASK Walk_To CANCELLED")
+            await self.a_agent.send_message("action", "stop")
+
+
 """
 TO BE TESTED
 Sends leave,AlienFlower command adding in the desired amount
@@ -267,11 +249,29 @@ class Drop_Off_Flowers:
 
     def __init__(self,a_agent: AAgent,amount:int) -> None:
         self.a_agent=a_agent
-        self.amount =amount
+        self.amount_to_drop =amount
+        self.initial_amount=0
 
+        inventory=self.a_agent.i_state.myInventoryList
+        for _, value in enumerate(inventory):
+            if value["name"] != "AlienFlower":
+                continue
+
+            self.initial_amount =value["amount"]
+            break
     async def run(self):
         try:
-            await self.a_agent.send_message("action","leave,AlienFlower," + str(self.amount))
+            while True:
+                if self.a_agent.i_state.nearbyContainerInventory:
+                    await self.a_agent.send_message("action","leave,AlienFlower," + str(self.amount_to_drop))
+                inventory=self.a_agent.i_state.myInventoryList
+                for _, value in enumerate(inventory):
+                    if value["name"] != "AlienFlower":
+                        continue
+
+                    if value["amount"] <= self.initial_amount - self.amount_to_drop or value["amount"] == 0:
+                        return True
+
         except asyncio.CancelledError:
             print("***** TASK Drop_Off_Flowers CANCELLED")
             await self.a_agent.send_message("action", "stop")
