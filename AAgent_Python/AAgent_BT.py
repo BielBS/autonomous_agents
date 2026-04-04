@@ -214,8 +214,8 @@ class AAgent:
         """
         msg = {"type": msg_type, "content": msg_content}
         msg_json = json.dumps(msg)
-        # if msg_type == "action":
-        #     print(msg_content)
+        if msg_type == "action": #TODO comment back up again after testing
+            print(msg_content)
         await self.ws.send_str(msg_json)
 
     async def receive_messages(self):

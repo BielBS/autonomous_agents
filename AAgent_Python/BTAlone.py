@@ -59,9 +59,9 @@ class BN_DoNothing(pt.behaviour.Behaviour):
             self.my_goal.cancel()
 #### Return To Base BNs #####
 
-class BN_IsInBase(pt.behaviour.Behaviour):
+class BN_IsInBaseOrOnRoute(pt.behaviour.Behaviour):
     """
-    Checks if the agent is in a valid base, 
+    Checks if the agent is in a valid base or if it's on route 
     if so SUCCESS
     if not FAILURE.
 
@@ -79,15 +79,17 @@ class BN_IsInBase(pt.behaviour.Behaviour):
 
     def __init__(self, aagent):
         self.my_goal=None
-        super(BN_IsInBase, self).__init__("BN_IsInBase")
+        super(BN_IsInBaseOrOnRoute, self).__init__("BN_IsInBase")
         self.my_agent=aagent
 
     def initialise(self) -> None:
         pass
 
     def update(self) -> common.Status:
-        if self.my_agent.i_state.currentNamedLoc in self.VALID_BASES:
+        if (self.my_agent.i_state.currentNamedLoc in self.VALID_BASES 
+            or self.my_agent.i_state.onRoute):
             return pt.common.Status.SUCCESS
+    
         return pt.common.Status.FAILURE
     
     def terminate(self, new_status: common.Status) -> None:
@@ -122,7 +124,7 @@ class BN_ReturnToBase(pt.behaviour.Behaviour):
         temp= common_goal_update(self.my_goal)
         if temp!= self.debug_current_state:
             self.debug_current_state=temp
-        print("Return To Base:",temp)
+            print("Return To Base:",temp)
         return temp
     
     def terminate(self, new_status: common.Status) -> None:
@@ -339,7 +341,7 @@ class BN_ForwardRandom(pt.behaviour.Behaviour):
     
     def terminate(self, new_status: common.Status):
         # Finishing the behaviour, therefore we have to stop the associated task
-        print("Terminate BN_ForwardRandom")
+        #print("Terminate BN_ForwardRandom")
         self.logger.debug("Terminate BN_ForwardRandom")
         if self.my_goal != None:
             self.my_goal.cancel()
@@ -374,7 +376,7 @@ class BN_TurnRandom(pt.behaviour.Behaviour):
 
     def terminate(self, new_status: common.Status):
         # Finishing the behaviour, therefore we have to stop the associated task
-        print("Terminate BN_TurnRandom")
+        #print("Terminate BN_TurnRandom")
         self.logger.debug("Terminate BN_TurnRandom")
         if self.my_goal!=None:
             self.my_goal.cancel()
@@ -456,7 +458,7 @@ class BTAlone:
         #checks if it's in a base, if not returns to base
         return_to_base=pt.composites.Selector(name="ReturnToBase",memory=False)
         return_to_base.add_children([
-                                        BN_IsInBase(aagent),
+                                        BN_IsInBaseOrOnRoute(aagent),
                                         BN_ReturnToBase(aagent)
         ])
 

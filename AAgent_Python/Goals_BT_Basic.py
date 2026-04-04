@@ -315,6 +315,10 @@ class Walk_To:
             #await self.a_agent.send_message("action","stop") #Just in case
             while True:
                 await self.a_agent.send_message("action","walk_to," + self.destination)
+                await asyncio.sleep(2)
+                if self.a_agent.i_state.onRoute:
+                    return True
+                """ old check, results in message spam until it gets there"""
                 if self.a_agent.i_state.currentNamedLoc == self.destination:
                     await self.a_agent.send_message("action","stop") #Just in case
                     return True
