@@ -57,9 +57,80 @@ class BN_DoNothing(pt.behaviour.Behaviour):
         print("Terminate DoNothing")
         if self.my_goal!=None:
             self.my_goal.cancel()
+#### Return To Base BNs #####
 
+class BN_IsInBase(pt.behaviour.Behaviour):
+    """
+    Checks if the agent is in a valid base, 
+    if so SUCCESS
+    if not FAILURE.
 
-##### Return To Base BNs #####
+    Author -- Us
+
+    Attributes:
+    VALID_BASES : list[str]         -- Exhaustive list of valid bases.
+    my_agent    : AAgent_BT.AAgent  -- Agent to check.
+    
+    Methods:
+    Standard behaviour methods.
+    """
+
+    VALID_BASES=["BaseAlpha","BaseBeta","BaseGamma","BaseDelta"]
+
+    def __init__(self, aagent):
+        self.my_goal=None
+        super(BN_IsInBase, self).__init__("BN_IsInBase")
+        self.my_agent=aagent
+
+    def initialise(self) -> None:
+        pass
+
+    def update(self) -> common.Status:
+        if self.my_agent.i_state.currentNamedLoc in self.VALID_BASES:
+            return pt.common.Status.SUCCESS
+        return pt.common.Status.FAILURE
+    
+    def terminate(self, new_status: common.Status) -> None:
+        pass
+
+class BN_ReturnToBase(pt.behaviour.Behaviour):
+    """
+    Goal based BN, returns to base via navMesh.
+    SUCCESS on reaching destination.
+    RUNNING while on the way to destination.
+
+    
+    NOTE: Currently only walks to the Alpha base, later on we can make it walk to the nearest base.
+
+    Author -- Us
+
+    Methods:
+    Standard behaviour methods.
+    """
+    def __init__(self, aagent):
+        self.my_goal = None
+        super(BN_ReturnToBase, self).__init__("BN_ReturnToBase")
+        self.my_agent = aagent
+        self.debug_current_state=None
+
+    def initialise(self) -> None:
+        print("BN_ReturnToBase Intialising")
+        self.my_goal= asyncio.create_task(Goals_BT_Basic.Walk_To(self.my_agent,"BaseAlpha").run())
+
+    def update(self) -> pt.common.Status:
+        #TODO remove temp
+        temp= common_goal_update(self.my_goal)
+        if temp!= self.debug_current_state:
+            self.debug_current_state=temp
+        print("Return To Base:",temp)
+        return temp
+    
+    def terminate(self, new_status: common.Status) -> None:
+        print("Terminate ReturnToBase")
+        if self.my_goal != None:
+            self.my_goal.cancel()
+
+##### Store Flowers BNs #####
 
 
 class BN_CheckInventory(pt.behaviour.Behaviour):
@@ -100,46 +171,12 @@ class BN_CheckInventory(pt.behaviour.Behaviour):
     def terminate(self, new_status: common.Status) -> None:
         pass
 
-class BN_ReturnToBase(pt.behaviour.Behaviour):
-    """
-    Goal based BN, returns to base via navMesh.
-    SUCCESS on reaching destination.
-    RUNNING while on the way to destination.
-
-    
-    NOTE: Currently only walks to the Alpha base, later on we can make it walk to the nearest base.
-
-    Author -- Us
-
-    Methods:
-    Standard behaviour methods.
-    """
-    def __init__(self, aagent):
-        self.my_goal = None
-        super(BN_ReturnToBase, self).__init__("BN_ReturnToBase")
-        self.my_agent = aagent
-        self.debug_current_state=None
-
-    def initialise(self) -> None:
-        self.my_goal= asyncio.create_task(Goals_BT_Basic.Walk_To(self.my_agent,"BaseAlpha").run())
-
-    def update(self) -> pt.common.Status:
-        #TODO remove temp
-        temp= common_goal_update(self.my_goal)
-        if temp!= self.debug_current_state:
-            self.debug_current_state=temp
-            print("Return To Base:",temp)
-        return temp
-    
-    def terminate(self, new_status: common.Status) -> None:
-        print("Terminate ReturnToBase")
-        if self.my_goal != None:
-            self.my_goal.cancel()
-
 class BN_DropOffFlowers(pt.behaviour.Behaviour):
     """
     Uses a goal to drop off the flowers onto a nearby container
-    
+    SUCCESS if it drops off the flowers
+    Else RUNNING
+
     Author -- Us
 
     Methods:
@@ -149,12 +186,19 @@ class BN_DropOffFlowers(pt.behaviour.Behaviour):
         self.my_goal=None
         super(BN_DropOffFlowers,self).__init__("BN_DropOffFlowers")
         self.my_agent=aagent
+        self.debug_current_state=None 
 
     def initialise(self) -> None:
+        print("BN_DropOffFlowers initialise")
         self.my_goal=asyncio.create_task(Goals_BT_Basic.Drop_Off_Flowers(self.my_agent,2).run())
 
     def update(self) -> common.Status:
-        return common_goal_update(self.my_goal)
+        #TODO remove temp
+        temp= common_goal_update(self.my_goal)
+        if temp!= self.debug_current_state:
+            self.debug_current_state=temp
+            print("Drop Off Flowers:",temp)
+        return temp
 
     def terminate(self, new_status: common.Status) -> None:
         print("Terminate DropOffFlowers")
@@ -209,15 +253,15 @@ class BN_MoveToFlower(pt.behaviour.Behaviour):
     Author -- Us
 
     Attributes:
-    TURN_DEGREES    : int -- The degrees between each ray, this way if you detect it on the first ray form the left the agent will turn TURN 2 TURN_DEGREES
-    FORWARD_MOVEMENT: int -- How far to move forward when a flower is detected straight ahead.
+    TURN_DEGREES    : float -- The degrees between each ray, this way if you detect it on the first ray form the left the agent will turn TURN 2 TURN_DEGREES
+    FORWARD_MOVEMENT: int   -- How far to move forward when a flower is detected straight ahead.
     
     Methods:
     Standard behaviour methods.
     
     """
 
-    TURN_DEGREES = 9 # Ideally should be the degrees between each ray
+    TURN_DEGREES = 11.25 # Ideally should be the degrees between each ray
     FORWARD_MOVEMENT = 5 #Ideally should be until it hits a flower but for now it's ray length
 
     def __init__(self, aagent):
@@ -233,24 +277,18 @@ class BN_MoveToFlower(pt.behaviour.Behaviour):
         sensor_obj_info = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO]
         for index, value in enumerate(sensor_obj_info):
             if value:  # there is a hit with an object
-                if value["tag"] == "AlienFlower":  # If it is a flower
-                    
-                    #Flower's straight ahead
-                    if index == 2:
-                       #print("Flower forward")
-                        self.my_goal = asyncio.create_task(Goals_BT_Basic.ForwardDist(self.my_agent,self.FORWARD_MOVEMENT,0,5).run())
+                if value["tag"] != "AlienFlower":  # If it is a flower
+                    continue
+            
+                #Flower's straight ahead
+                if index == 2:
+                    #print("Flower forward")
+                    self.my_goal = asyncio.create_task(Goals_BT_Basic.ForwardDist(self.my_agent,self.FORWARD_MOVEMENT,0,5).run())
+                else:
+                    #print("Flower to the sides")
+                    self.my_goal = asyncio.create_task(Goals_BT_Basic.Turn_customizable(self.my_agent,0,(index-2)*self.TURN_DEGREES).run())
+                break
 
-                    #Flower's to your left
-                    if index < 2:
-                       #print(f"Flower left index: {index}")
-                        self.my_goal = asyncio.create_task(Goals_BT_Basic.Turn_customizable(self.my_agent,-1,(index+1)*self.TURN_DEGREES).run())
-                    
-                    #Flower's to your right
-                    if index > 2:
-                       #print(f"Flower right index: {index}")
-                        self.my_goal = asyncio.create_task(Goals_BT_Basic.Turn_customizable(self.my_agent,1,(index+1)*self.TURN_DEGREES).run())
-                    break
-                
     def update(self):
         #TODO remove temp
         temp= common_goal_update(self.my_goal)
@@ -265,7 +303,6 @@ class BN_MoveToFlower(pt.behaviour.Behaviour):
         self.logger.debug("Terminate BN_MoveToFlower")
         if self.my_goal!= None:
             self.my_goal.cancel()
-            print("Canceling Goal")
         
 
 ###### Roaming BNs Don't Touch Much #######
@@ -376,20 +413,20 @@ class BN_DetectFrozen(pt.behaviour.Behaviour):
 class BTAlone:
     """
     
-    
+    FIXME: Tree outdated
     Tree Structure:
     
                            Root (Selector)
                           /            \
                       Frozen          false_root(Selector)-----------------------------|
                    (Sequence)           /        |                                      \
-                    /      \           /         |------------------|                    \
-                   /        \         /                             |                     \
+                    /      \\          /         |------------------|                    \
+                   /        \\        /                             |                     \
             DetectFrozen  DoNothing  /                              |                      \
                                ReturnToBase                   FlowerProtocol          Roaming(Parallel)
                                (Sequence)---|                  (Sequence)               /          \
-                              /    |         \                  /      \               /            \
-                             /     |          \                /        \             /              \
+                              /    |         \\                  /      \\             /            \
+                             /     |          \\                /        \\           /              \
                     CheckInv  ReturnToBase DropFlowers DetectFlower MoveToFlower   ForwardRandom TurnRandom
                                                        
     
@@ -415,13 +452,22 @@ class BTAlone:
                                         BN_DetectFlower(aagent),
                                         BN_MoveToFlower(aagent),
                                         ]) 
-        #Check inventory when 2 return to base
-        return_to_base= pt.composites.Sequence(name="ReturnToBase",memory=False)
+        
+        #checks if it's in a base, if not returns to base
+        return_to_base=pt.composites.Selector(name="ReturnToBase",memory=False)
         return_to_base.add_children([
+                                        BN_IsInBase(aagent),
+                                        BN_ReturnToBase(aagent)
+        ])
+
+        #Check inventory when 2 return to base, then drop off flowers
+        store_flowers= pt.composites.Sequence(name="storeFlowers",memory=False) #Changed memory from false to True to test if it fixes DropOffFlowers, but be careful when you implement enemies that removes frlowers form the inventory
+        store_flowers.add_children([
                                         BN_CheckInventory(aagent),
-                                        BN_ReturnToBase(aagent),
+                                        return_to_base,
                                         BN_DropOffFlowers(aagent),
                                      ])
+        
 
         #TODO, idk if neccesary, improve roaming
         roaming = pt.composites.Parallel(name="Parallel", policy=py_trees.common.ParallelPolicy.SuccessOnAll())
@@ -432,7 +478,7 @@ class BTAlone:
 
         false_root = pt.composites.Selector(name="Selector", memory=False)
         false_root.add_children([
-                                    return_to_base,
+                                    store_flowers,
                                     flower_protocol,
                                     roaming
                                     ])

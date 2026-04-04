@@ -1,6 +1,7 @@
 import math
 import random
 import asyncio
+import time
 import Sensors
 from collections import Counter
 
@@ -149,6 +150,7 @@ class Turn_customizable:
     Attributes:
     LEFT            : int -- Left identifyer
     RIGHT           : int -- Right identifyer
+    DEDUCE_IT       : int -- Identifyer representing that the direction should be deduced by the degrees (if they're positive or negative)
     VALID_DIRECTIONS: int -- List of valid directiosn
     SELECTING       : int -- Selecting status identifyer
     TURNING         : int -- Turning status identifyer
@@ -156,15 +158,16 @@ class Turn_customizable:
         How close do we need to be to the desired heading to consider it a SUCCESS.
         NOTE: It's in degrees, low values may cause the agent to spin repeatedly on itself since it skipped over the desired heading.
 
-    Methods:
+    Methods: 
     __init__  -- Initialization. Raises assertion error if direction isn't in VALID_DIRECTIONS.
     async run -- Inside a while loop first selects new heading based on given attributes then constantly turns until it is within TURNING_THRESHOLD of the desired heading.
         
     """
     LEFT = -1
     RIGHT = 1
+    DEDUCE_IT = 0
 
-    VALID_DIRECTIONS=[LEFT,RIGHT]
+    VALID_DIRECTIONS=[LEFT,RIGHT,DEDUCE_IT]
 
     SELECTING = 0
     TURNING = 1
@@ -192,9 +195,15 @@ class Turn_customizable:
             while True:
                 if self.state == self.SELECTING:
                     # print("SELECTING NEW TURN")
-                    rotation_direction = self.direction
+
+                    if self.direction == self.DEDUCE_IT:
+                        rotation_direction = -1 if self.degrees<0 else 1
+                        rotation_degrees=self.degrees
+                    else:
+                        rotation_direction = self.direction
+                        rotation_degrees = self.degrees * rotation_direction
+    
                     # print(f"Rotation direction: {rotation_direction}")
-                    rotation_degrees = self.degrees * rotation_direction
                     # print("Degrees: " + str(rotation_degrees))
                     current_heading = self.i_state.rotation["y"]
                     # print(f"Current heading: {current_heading}")
@@ -237,9 +246,9 @@ class Teleport_To:
     Author -- Us
 
     Attributes:
-      a_agent : AAgent_BT.AAgent
+      a_agent       : AAgent_BT.AAgent
         The agent to teleport.
-     destination : str
+     destination    : str
         The keyword name of the destination, if an invalid name is set nothing will happen.
 
     Methods:
@@ -264,12 +273,14 @@ class Walk_To:
     """
     Walks to a given destination using the navMesh
 
+    BUG: When it finally returns to base the agent doesn't seem to stop, if you move it manually it will continue to walk_to base
+    
     Author -- Us
 
     Attributes:
-    a_agent : AAgent_BT.AAgent
+    a_agent         : AAgent_BT.AAgent
         The agent to move.
-    destination : str
+    destination     : str
         The keyword name of the destination, if an invalid name is set nothing will happen.
     VALID_LOCATIONS : list[str]
         A non-exhaustive list of valid locations. 
@@ -301,7 +312,7 @@ class Walk_To:
         None -- in any other case
         """
         try:
-            await self.a_agent.send_message("action","stop") #Just in case
+            #await self.a_agent.send_message("action","stop") #Just in case
             while True:
                 await self.a_agent.send_message("action","walk_to," + self.destination)
                 if self.a_agent.i_state.currentNamedLoc == self.destination:
@@ -309,7 +320,7 @@ class Walk_To:
                     return True
         except asyncio.CancelledError:
             print("***** TASK Walk_To CANCELLED")
-            await self.a_agent.send_message("action", "stop")
+            await self.a_agent.send_message("action", "ntm")
 
 
 
@@ -322,10 +333,13 @@ class Drop_Off_Flowers:
     Author -- Us
 
     Attributes:
-    a_agent -- AAgent_BT.AAgent
+    a_agent : AAgent_BT.AAgent
         The agent meant to perform the action.
-    amount -- int
+    amount : int
         The amount to drop off.
+    intial_amount : int
+        The amount of flowers the agent has upon creating the class
+
         
     Methods:
     __init__ -- intialization, recieves AAgent and amount to drop off.
@@ -338,25 +352,25 @@ class Drop_Off_Flowers:
         self.initial_amount=0
 
         inventory=self.a_agent.i_state.myInventoryList
-        for _, value in enumerate(inventory):
-            if value["name"] != "AlienFlower":
-                continue
+        if inventory[0]["name"] == "AlienFlower":
+            self.initial_amount =inventory[0]["amount"]
+        print("Initial ammount:",self.initial_amount)
 
-            self.initial_amount =value["amount"]
-            break
     async def run(self):
         try:
+            #await self.a_agent.send_message("action","ntm") # maybe this fixes the dropOff bug, no it does not
             while True:
-                if self.a_agent.i_state.nearbyContainerInventory:
-                    await self.a_agent.send_message("action","leave,AlienFlower," + str(self.amount_to_drop))
-                inventory=self.a_agent.i_state.myInventoryList
-                for _, value in enumerate(inventory):
-                    if value["name"] != "AlienFlower":
-                        continue
+                if getattr(self.a_agent.i_state, 'nearbyContainerInventory', False):
+                    print("Sending leave command...")
+                    await self.a_agent.send_message("action","leave,AlienFlower,2") #+ str(self.amount_to_drop)) test to see if for some reason this is the issue
+                    #print(f"Inventory after send: {self.a_agent.i_state.myInventoryList}")
 
-                    if value["amount"] <= self.initial_amount - self.amount_to_drop or value["amount"] == 0:
-                        return True
-
+                    inventory=self.a_agent.i_state.myInventoryList #Changed this from a for loop to just looking at the first (and only) slot to see if it fixes the dropOff bug
+                    if inventory[0]["name"] == "AlienFlower":
+                        if inventory[0]["amount"] <= (self.initial_amount - self.amount_to_drop) or inventory[0]["amount"] == 0:
+                            print("Drop off successful!")
+                            return True
+                    #print("Drop off not successful, retrying...")
         except asyncio.CancelledError:
             print("***** TASK Drop_Off_Flowers CANCELLED")
             await self.a_agent.send_message("action", "stop")
