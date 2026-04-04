@@ -59,9 +59,9 @@ class BN_DoNothing(pt.behaviour.Behaviour):
             self.my_goal.cancel()
 #### Return To Base BNs #####
 
-class BN_IsInBase(pt.behaviour.Behaviour):
+class BN_IsInBaseNearContainer(pt.behaviour.Behaviour):
     """
-    Checks if the agent is in a valid base or if it's on route 
+    Checks if the agent is in a valid base and near a container 
     if so SUCCESS
     if not FAILURE.
 
@@ -79,14 +79,15 @@ class BN_IsInBase(pt.behaviour.Behaviour):
 
     def __init__(self, aagent):
         self.my_goal=None
-        super(BN_IsInBase, self).__init__("BN_IsInBase")
+        super(BN_IsInBaseNearContainer, self).__init__("BN_IsInBaseNearContainer")
         self.my_agent=aagent
 
     def initialise(self) -> None:
         pass
 
     def update(self) -> common.Status:
-        if (self.my_agent.i_state.currentNamedLoc in self.VALID_BASES):
+        if (self.my_agent.i_state.currentNamedLoc in self.VALID_BASES
+            and self.my_agent.i_state.nearbyContainerInventory):
             return pt.common.Status.SUCCESS
     
         return pt.common.Status.FAILURE
@@ -457,7 +458,7 @@ class BTAlone:
         #checks if it's in a base, if not returns to base
         return_to_base=pt.composites.Selector(name="ReturnToBase",memory=False)
         return_to_base.add_children([
-                                        BN_IsInBase(aagent),
+                                        BN_IsInBaseNearContainer(aagent),
                                         BN_ReturnToBase(aagent)
         ])
 

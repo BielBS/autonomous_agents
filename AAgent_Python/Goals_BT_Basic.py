@@ -312,17 +312,16 @@ class Walk_To:
         None -- in any other case
         """
         try:
-            #await self.a_agent.send_message("action",f"walk_to,{self.destination}")
-            #await asyncio.sleep(0.5)
-
             while True:
                 #print("On Route: ",self.a_agent.i_state.onRoute)
                 if not self.a_agent.i_state.onRoute:
                     await self.a_agent.send_message("action",f"walk_to,{self.destination}")
-                    await asyncio.sleep(0.1) # Any kind of asyncio sleep here causes an invalid state  for some reason
-
-                if (self.a_agent.i_state.currentNamedLoc == self.destination ):
-                    await self.a_agent.send_message("action","stop") #Just in case
+                
+                await asyncio.sleep(0.1) 
+                
+                if (self.a_agent.i_state.currentNamedLoc == self.destination
+                    and self.a_agent.i_state.nearbyContainerInventory):
+                    #await self.a_agent.send_message("action","stop") #Just in case
                     return True
                 
                 #await asyncio.sleep(0)
