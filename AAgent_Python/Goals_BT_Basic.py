@@ -312,19 +312,24 @@ class Walk_To:
         None -- in any other case
         """
         try:
-            #await self.a_agent.send_message("action","stop") #Just in case
+            #await self.a_agent.send_message("action",f"walk_to,{self.destination}")
+            #await asyncio.sleep(0.5)
+
             while True:
-                await self.a_agent.send_message("action","walk_to," + self.destination)
-                await asyncio.sleep(2)
-                if self.a_agent.i_state.onRoute:
-                    return True
-                """ old check, results in message spam until it gets there"""
-                if self.a_agent.i_state.currentNamedLoc == self.destination:
+                #print("On Route: ",self.a_agent.i_state.onRoute)
+                if not self.a_agent.i_state.onRoute:
+                    await self.a_agent.send_message("action",f"walk_to,{self.destination}")
+                    await asyncio.sleep(0.1) # Any kind of asyncio sleep here causes an invalid state  for some reason
+
+                if (self.a_agent.i_state.currentNamedLoc == self.destination ):
                     await self.a_agent.send_message("action","stop") #Just in case
                     return True
+                
+                #await asyncio.sleep(0)
+                
         except asyncio.CancelledError:
             print("***** TASK Walk_To CANCELLED")
-            await self.a_agent.send_message("action", "ntm")
+            await self.a_agent.send_message("action", "stop")
 
 
 
@@ -365,8 +370,9 @@ class Drop_Off_Flowers:
             #await self.a_agent.send_message("action","ntm") # maybe this fixes the dropOff bug, no it does not
             while True:
                 if getattr(self.a_agent.i_state, 'nearbyContainerInventory', False):
-                    print("Sending leave command...")
+                    #print("Sending leave command...")
                     await self.a_agent.send_message("action","leave,AlienFlower,2") #+ str(self.amount_to_drop)) test to see if for some reason this is the issue
+                    await asyncio.sleep(2)
                     #print(f"Inventory after send: {self.a_agent.i_state.myInventoryList}")
 
                     inventory=self.a_agent.i_state.myInventoryList #Changed this from a for loop to just looking at the first (and only) slot to see if it fixes the dropOff bug

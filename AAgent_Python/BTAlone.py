@@ -59,7 +59,7 @@ class BN_DoNothing(pt.behaviour.Behaviour):
             self.my_goal.cancel()
 #### Return To Base BNs #####
 
-class BN_IsInBaseOrOnRoute(pt.behaviour.Behaviour):
+class BN_IsInBase(pt.behaviour.Behaviour):
     """
     Checks if the agent is in a valid base or if it's on route 
     if so SUCCESS
@@ -79,15 +79,14 @@ class BN_IsInBaseOrOnRoute(pt.behaviour.Behaviour):
 
     def __init__(self, aagent):
         self.my_goal=None
-        super(BN_IsInBaseOrOnRoute, self).__init__("BN_IsInBase")
+        super(BN_IsInBase, self).__init__("BN_IsInBase")
         self.my_agent=aagent
 
     def initialise(self) -> None:
         pass
 
     def update(self) -> common.Status:
-        if (self.my_agent.i_state.currentNamedLoc in self.VALID_BASES 
-            or self.my_agent.i_state.onRoute):
+        if (self.my_agent.i_state.currentNamedLoc in self.VALID_BASES):
             return pt.common.Status.SUCCESS
     
         return pt.common.Status.FAILURE
@@ -128,7 +127,7 @@ class BN_ReturnToBase(pt.behaviour.Behaviour):
         return temp
     
     def terminate(self, new_status: common.Status) -> None:
-        print("Terminate ReturnToBase")
+        print("Terminate ReturnToBase:",new_status)
         if self.my_goal != None:
             self.my_goal.cancel()
 
@@ -458,12 +457,12 @@ class BTAlone:
         #checks if it's in a base, if not returns to base
         return_to_base=pt.composites.Selector(name="ReturnToBase",memory=False)
         return_to_base.add_children([
-                                        BN_IsInBaseOrOnRoute(aagent),
+                                        BN_IsInBase(aagent),
                                         BN_ReturnToBase(aagent)
         ])
 
         #Check inventory when 2 return to base, then drop off flowers
-        store_flowers= pt.composites.Sequence(name="storeFlowers",memory=False) #Changed memory from false to True to test if it fixes DropOffFlowers, but be careful when you implement enemies that removes frlowers form the inventory
+        store_flowers= pt.composites.Sequence(name="storeFlowers",memory=False) 
         store_flowers.add_children([
                                         BN_CheckInventory(aagent),
                                         return_to_base,
