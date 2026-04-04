@@ -5,6 +5,11 @@ import Sensors
 from collections import Counter
 
 def calculate_distance(point_a, point_b):
+    """
+    Calculates the euclidean distance between 2 points
+
+    Author -- Professor
+    """
     distance = math.sqrt((point_b['x'] - point_a['x']) ** 2 +
                          (point_b['y'] - point_a['y']) ** 2 +
                          (point_b['z'] - point_a['z']) ** 2)
@@ -27,6 +32,8 @@ class DoNothing:
 class ForwardStop:
     """
         Moves forward till it finds an obstacle. Then stops.
+
+        Author -- Professor
     """
     STOPPED = 0
     MOVING = 1
@@ -67,6 +74,8 @@ class ForwardDist:
         Moves forward a certain distance specified in the parameter "dist".
         If "dist" is -1, selects a random distance between the initial
         parameters of the class "d_min" and "d_max"
+
+        Author -- Professor
     """
     STOPPED = 0
     MOVING = 1
@@ -133,11 +142,29 @@ class Turn_customizable:
     The action of turning a given set of degrees in a given direction (right or left)
     
     Possible BUG:Sometimes it keeps truning over and over, probably because it skips over the desired heading and does another full turn
-        Added TURN_THRESHOLD instead of magic number and changed it from 5 to 10, in an attempt to fix it
+        Added TURN_THRESHOLD instead of magic number and changed it from 5 to 10, in an attempt to fix it [03/04/26] --> Appears to work so far [04/04/26]
     
+    Author -- Mainly our professor but with some modifications so that the turn can be specified.    
+        
+    Attributes:
+    LEFT            : int -- Left identifyer
+    RIGHT           : int -- Right identifyer
+    VALID_DIRECTIONS: int -- List of valid directiosn
+    SELECTING       : int -- Selecting status identifyer
+    TURNING         : int -- Turning status identifyer
+    TURN_THRESHOLD  : int 
+        How close do we need to be to the desired heading to consider it a SUCCESS.
+        NOTE: It's in degrees, low values may cause the agent to spin repeatedly on itself since it skipped over the desired heading.
+
+    Methods:
+    __init__  -- Initialization. Raises assertion error if direction isn't in VALID_DIRECTIONS.
+    async run -- Inside a while loop first selects new heading based on given attributes then constantly turns until it is within TURNING_THRESHOLD of the desired heading.
+        
     """
     LEFT = -1
     RIGHT = 1
+
+    VALID_DIRECTIONS=[LEFT,RIGHT]
 
     SELECTING = 0
     TURNING = 1
@@ -145,7 +172,7 @@ class Turn_customizable:
     TURN_THRESHOLD=10
 
 
-    def __init__(self, a_agent,direction,degrees):
+    def __init__(self, a_agent,direction:int,degrees:float):
         self.a_agent = a_agent
         self.rc_sensor = a_agent.rc_sensor
         self.i_state = a_agent.i_state
@@ -154,6 +181,8 @@ class Turn_customizable:
         self.new_heading = 0
 
         self.state = self.SELECTING
+
+        assert direction in self.VALID_DIRECTIONS
 
         self.direction=direction
         self.degrees=degrees
@@ -197,12 +226,26 @@ class Turn_customizable:
 
 from AAgent_BT import AAgent
 
-"""
-WIP
-Teleports to a given destination
-"""
-class Teleport_To:
 
+class Teleport_To:
+    """
+    UNTESTED
+    Teleports to a given destination
+
+    On cancel stops all actions.
+    
+    Author -- Us
+
+    Attributes:
+      a_agent : AAgent_BT.AAgent
+        The agent to teleport.
+     destination : str
+        The keyword name of the destination, if an invalid name is set nothing will happen.
+
+    Methods:
+    __init__  -- intitialization
+    asnyc run -- inside a while loop sends the action to teleport, stops all actions if canceled 
+    """
 
     def __init__(self,a_agent:AAgent,destination:str) -> None:
         self.a_agent=a_agent
@@ -216,11 +259,27 @@ class Teleport_To:
             await self.a_agent.send_message("action", "stop")
 
 
-"""
-WIP
-Walks to a given destination using the navMesh
-"""
+
 class Walk_To:
+    """
+    Walks to a given destination using the navMesh
+
+    Author -- Us
+
+    Attributes:
+    a_agent : AAgent_BT.AAgent
+        The agent to move.
+    destination : str
+        The keyword name of the destination, if an invalid name is set nothing will happen.
+    VALID_LOCATIONS : list[str]
+        A non-exhaustive list of valid locations. 
+        Currently only ontains base names.
+        Currently unused.
+
+    Methods:
+    __init__  -- intialization
+    async run -- stops current actions (just in case), then in a while loop awaits the 'walk_to action'
+    """
 
     VALID_LOCATIONS=["BaseAlpha","BaseBeta","BaseGamma","BaseDelta"]
 
@@ -229,6 +288,18 @@ class Walk_To:
         self.destination=destination
 
     async def run(self):
+        """
+        Moves using NavMesh to the given location.
+        
+        Stops current actions (just in case)
+        Then in a while loop awaits the 'walk_to action', if succesfull stops current actions.
+        
+        On cancel stops current actions.
+
+        Returns:
+        True -- if the destination was reached
+        None -- in any other case
+        """
         try:
             await self.a_agent.send_message("action","stop") #Just in case
             while True:
@@ -241,11 +312,25 @@ class Walk_To:
             await self.a_agent.send_message("action", "stop")
 
 
-"""
-TO BE TESTED
-Sends leave,AlienFlower command adding in the desired amount
-"""
+
 class Drop_Off_Flowers:
+    """
+    Sends 'leave,AlienFlower,x' command where x is the desired amount set at init.
+
+    BUG: Currently not working
+    
+    Author -- Us
+
+    Attributes:
+    a_agent -- AAgent_BT.AAgent
+        The agent meant to perform the action.
+    amount -- int
+        The amount to drop off.
+        
+    Methods:
+    __init__ -- intialization, recieves AAgent and amount to drop off.
+    async run -- awaits 'leave action' inside a while loop.
+    """
 
     def __init__(self,a_agent: AAgent,amount:int) -> None:
         self.a_agent=a_agent

@@ -7,16 +7,19 @@ from py_trees import common
 import Goals_BT_Basic
 import Sensors
 
-"""
-Common update for goal based BN.
 
-Returns FAILURE if goal is None
-Returns RUNNING if goal is not done
-Returns SUCCESS if goal result is True
-
-Else returns FAILURE
-"""
 def common_goal_update(goal) -> pt.common.Status:
+    """
+    Common update for goal based BN.
+
+    Author -- Us
+
+    Returns:
+    FAILURE if goal is None
+    RUNNING if goal is not done
+    SUCCESS if goal result is True
+    Else FAILURE
+    """
     if goal == None:
             return pt.common.Status.FAILURE
         
@@ -32,6 +35,11 @@ def common_goal_update(goal) -> pt.common.Status:
 ###### Do Nothing BN #####
 
 class BN_DoNothing(pt.behaviour.Behaviour):
+    """
+    Goal based BN, does nothing, just waits a set amount of time.
+
+    Author -- Professor
+    """
     def __init__(self, aagent):
         self.my_agent = aagent
         self.my_goal = None
@@ -53,10 +61,16 @@ class BN_DoNothing(pt.behaviour.Behaviour):
 
 ##### Return To Base BNs #####
 
-"""
-Checks if the inventory has the required amount of flowers, if so returns SUCCESS, else returns FAILURE
-"""
+
 class BN_CheckInventory(pt.behaviour.Behaviour):
+    """
+    Checks if the inventory has the required amount of flowers, if so SUCCESS, else FAILURE
+    
+    Author -- Us
+
+    Methods:
+    Standard behaviour methods
+    """
     def __init__(self, aagent):
         self.my_goal = None
         super(BN_CheckInventory, self).__init__("BN_MoveForward")
@@ -85,12 +99,21 @@ class BN_CheckInventory(pt.behaviour.Behaviour):
     
     def terminate(self, new_status: common.Status) -> None:
         pass
-"""
-To Test
-Returns to base via Walk_to navMesh action.
-Currently only walks to the Alpha base, later on we can make it walk to the nearest base.
-"""
+
 class BN_ReturnToBase(pt.behaviour.Behaviour):
+    """
+    Goal based BN, returns to base via navMesh.
+    SUCCESS on reaching destination.
+    RUNNING while on the way to destination.
+
+    
+    NOTE: Currently only walks to the Alpha base, later on we can make it walk to the nearest base.
+
+    Author -- Us
+
+    Methods:
+    Standard behaviour methods.
+    """
     def __init__(self, aagent):
         self.my_goal = None
         super(BN_ReturnToBase, self).__init__("BN_ReturnToBase")
@@ -114,6 +137,14 @@ class BN_ReturnToBase(pt.behaviour.Behaviour):
             self.my_goal.cancel()
 
 class BN_DropOffFlowers(pt.behaviour.Behaviour):
+    """
+    Uses a goal to drop off the flowers onto a nearby container
+    
+    Author -- Us
+
+    Methods:
+    Standard behaviour methods.
+    """
     def __init__(self, aagent):
         self.my_goal=None
         super(BN_DropOffFlowers,self).__init__("BN_DropOffFlowers")
@@ -136,6 +167,16 @@ class BN_DropOffFlowers(pt.behaviour.Behaviour):
 ###### Flower Protocol BNs #####
 
 class BN_DetectFlower(pt.behaviour.Behaviour):
+    """
+    Checks if any ray detects an 'AlienFlower' object
+    SUCCESS if so
+    FAILURE if not
+
+    Author -- Professor 
+
+    Methods:
+    Standard behaviour methods
+    """
     def __init__(self, aagent):
         self.my_goal = None
         super(BN_DetectFlower, self).__init__("BN_DetectFlower")
@@ -158,12 +199,29 @@ class BN_DetectFlower(pt.behaviour.Behaviour):
     def terminate(self, new_status: common.Status):
         pass
 
-'''Turns towards a flower and then moves forward until it hits something'''
 class BN_MoveToFlower(pt.behaviour.Behaviour):
+    """
+    Goal based BN.
+    Turns towards a flower and then moves forward until it hits something.
+    Selects a flower from left to right on intialise.
+
+
+    Author -- Us
+
+    Attributes:
+    TURN_DEGREES    : int -- The degrees between each ray, this way if you detect it on the first ray form the left the agent will turn TURN 2 TURN_DEGREES
+    FORWARD_MOVEMENT: int -- How far to move forward when a flower is detected straight ahead.
+    
+    Methods:
+    Standard behaviour methods.
+    
+    """
+
+    TURN_DEGREES = 9 # Ideally should be the degrees between each ray
+    FORWARD_MOVEMENT = 5 #Ideally should be until it hits a flower but for now it's ray length
 
     def __init__(self, aagent):
-        self.turn_degrees=9 # Ideally should be the degrees between each ray
-        self.forward_movement=5 #Ideally should be ray length
+
         self.my_goal = None
         super(BN_MoveToFlower, self).__init__("BN_MoveToFlower")
         self.my_agent = aagent
@@ -180,17 +238,17 @@ class BN_MoveToFlower(pt.behaviour.Behaviour):
                     #Flower's straight ahead
                     if index == 2:
                        #print("Flower forward")
-                        self.my_goal = asyncio.create_task(Goals_BT_Basic.ForwardDist(self.my_agent,self.forward_movement,0,5).run())
+                        self.my_goal = asyncio.create_task(Goals_BT_Basic.ForwardDist(self.my_agent,self.FORWARD_MOVEMENT,0,5).run())
 
                     #Flower's to your left
                     if index < 2:
                        #print(f"Flower left index: {index}")
-                        self.my_goal = asyncio.create_task(Goals_BT_Basic.Turn_customizable(self.my_agent,-1,(index+1)*self.turn_degrees).run())
+                        self.my_goal = asyncio.create_task(Goals_BT_Basic.Turn_customizable(self.my_agent,-1,(index+1)*self.TURN_DEGREES).run())
                     
                     #Flower's to your right
                     if index > 2:
                        #print(f"Flower right index: {index}")
-                        self.my_goal = asyncio.create_task(Goals_BT_Basic.Turn_customizable(self.my_agent,1,(index+1)*self.turn_degrees).run())
+                        self.my_goal = asyncio.create_task(Goals_BT_Basic.Turn_customizable(self.my_agent,1,(index+1)*self.TURN_DEGREES).run())
                     break
                 
     def update(self):
@@ -213,6 +271,20 @@ class BN_MoveToFlower(pt.behaviour.Behaviour):
 ###### Roaming BNs Don't Touch Much #######
 
 class BN_ForwardRandom(pt.behaviour.Behaviour):
+    """
+    Goal based BN,
+    Moves Forward a random amount from 1 to 5.
+    
+    SUCCESS if length is reached or passed
+    FAILURE if stuck in place
+    RUNNING while moving
+
+    Author -- Professor
+    NOTE: We've changed update from hardcoded to referencing the common_goal_update function but the behaviour is the same.
+
+    Methods:
+    Standard behaviour methods
+    """
     def __init__(self, aagent):
         self.my_goal = None
         #print("Initializing BN_ForwardRandom")
@@ -237,6 +309,19 @@ class BN_ForwardRandom(pt.behaviour.Behaviour):
 
 
 class BN_TurnRandom(pt.behaviour.Behaviour):
+    """
+    Goal based BN,
+    Moves turns a random amount from 0 degrees to 180, randomly choosing between left and right.
+    
+    SUCCESS if new heading is achieved (with a margin of error)
+    RUNNING while turning
+
+    Author -- Professor
+    NOTE: We've changed update from hardcoded to referencing the common_goal_update function but the behaviour is the same.
+
+    Methods:
+    Standard behaviour methods
+    """
     def __init__(self, aagent):
         self.my_goal = None
         #print("Initializing BN_TurnRandom")
@@ -261,6 +346,16 @@ class BN_TurnRandom(pt.behaviour.Behaviour):
 ###### Detect Frozen BN Don't Touch Much #######
 
 class BN_DetectFrozen(pt.behaviour.Behaviour):  
+    """
+    Detects if the internal state of the agent 'isFrozen' is set to True.
+    SUCCESS if it is frozen
+    else FAILURE
+
+    Author -- Professor
+
+    Methods: 
+    Standard behaviour methods.
+    """
     def __init__(self, aagent):      
         self.my_goal = None      
           #print("Initializing BN_DetectInventoryFull")      
@@ -268,8 +363,8 @@ class BN_DetectFrozen(pt.behaviour.Behaviour):
         self.my_agent = aagent
         self.i_state = aagent.i_state
     def initialise(self):
-        
         pass 
+
     def update(self):   
         if self.i_state.isFrozen: 
             return pt.common.Status.SUCCESS
@@ -279,6 +374,32 @@ class BN_DetectFrozen(pt.behaviour.Behaviour):
 
 
 class BTAlone:
+    """
+    
+    
+    Tree Structure:
+    
+                           Root (Selector)
+                          /            \
+                      Frozen          false_root(Selector)-----------------------------|
+                   (Sequence)           /        |                                      \
+                    /      \           /         |------------------|                    \
+                   /        \         /                             |                     \
+            DetectFrozen  DoNothing  /                              |                      \
+                               ReturnToBase                   FlowerProtocol          Roaming(Parallel)
+                               (Sequence)---|                  (Sequence)               /          \
+                              /    |         \                  /      \               /            \
+                             /     |          \                /        \             /              \
+                    CheckInv  ReturnToBase DropFlowers DetectFlower MoveToFlower   ForwardRandom TurnRandom
+                                                       
+    
+    Selector: Returns SUCCESS when first child succeeds
+    Sequence: Returns SUCCESS only when all children succeed in order
+    Parallel: Returns SUCCESS when all children succeed (SuccessOnAll policy)
+
+    NOTE: ASCII tree 'drawn' with AI + some (IMPORTANT) human modificaitons
+    """
+
     def __init__(self, aagent):
         # py_trees.logging.level = py_trees.logging.Level.DEBUG
 
