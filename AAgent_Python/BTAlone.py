@@ -8,6 +8,13 @@ import Goals_BT_Basic
 import Sensors
 
 
+"""IMPASSABLE_OBJECT_TAGS   : list[str] -- A list containing all impassable object tags that the agent should avoid."""
+IMPASSABLE_OBJECT_TAGS = ["Wall","Rock","Machine"]
+
+"""NUM_RAYS_PER_SIDE        : int       -- The number of sensor rays defined per side in the json. This is used to get the front facing ray. Is equivalent to front ray index"""
+NUM_RAYS_PER_SIDE = 2 #Ideally this should be read from somewhere
+
+
 def common_goal_update(goal) -> pt.common.Status:
     """
     Common update for goal based BN.
@@ -326,6 +333,117 @@ tags to take into acount when improving roaming(CASE SENSITIVE!):
     Machine     (the visible "thing" that represents the container)
 
 """
+###### Improved Roaming Attempt ########
+
+class BN_IsForwardBlocked(pt.behaviour.Behaviour):
+    """
+    This simple BN checks if continuing forward is feasible or if there is an impassable object in front
+    FAILURE if it is NOT an impassable object within MIN_SAFE_DISTANCE(or not detecting anything)
+    SUCCESS if the front ray is detecting an impassable object within MIN_SAFE_DISTANCE
+
+    I know the name is a bit confusing since resurning SUCCESS means it is SUCCESSFULLY blocked, but it is done like this to make the BT work properlly and not stutter
+
+    Author -- Us
+    
+    Attributes:
+    MIN_SAFE_DISTANCE : float -- Distance at which an impassable object is considered to be blocking the agent.
+
+    Methods:
+    Standard behaviour methods
+    """
+    MIN_SAFE_DISTANCE = 2.0
+    def __init__(self,aagent):
+        self.my_goal=None
+        super(BN_IsForwardBlocked,self).__init__("BN_IsForwardBlocked")
+        self.my_agent = aagent
+
+    def initialise(self) -> None:
+        pass
+
+    def update(self) -> pt.common.Status:
+        #This might not seem intuitive but it gets the middle ray always. This is because if there are X number of rays per side the forward facing one is X+1, but since we start counting at 0 it's X
+        front_ray_sensor = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO][NUM_RAYS_PER_SIDE] 
+        
+        if front_ray_sensor:  # there is a hit with an object
+            if front_ray_sensor["tag"] in IMPASSABLE_OBJECT_TAGS:
+                if front_ray_sensor["distance"] < self.MIN_SAFE_DISTANCE:  
+                    return pt.common.Status.SUCCESS
+            
+        return pt.common.Status.FAILURE
+
+    def terminate(self, new_status: common.Status) -> None:
+        pass
+
+
+
+
+class BN_SmartTurning(pt.behaviour.Behaviour):
+    """
+    Goal based BN,
+    Moves turns a random amount from 0 degrees to MAX_DEGREES_TO_TURN (56.25), randomly choosing between left and right.
+    If it detects an impassable object is too close it won't turn towards it.
+    If all rays detect an object too close it will do a random turn from -EMERGENCY_TURN_DEGREES (-180) to EMERGENCY_TURN_DEGREES (180) degrees
+    
+    SUCCESS if new heading is achieved (with a margin of error)
+    RUNNING while turning
+
+    Author -- Us, inspired by the professors TurnRandom
+
+    Attributes:
+    MIN_DISTANCE_THRESHOLD  : float -- At what distance should the agent avoid turing towards that, this mainly helps if the rays become long or when there are thight corridors.
+    MAX_DEGREES_TO_TURN     : float  
+        When moving normally how much should it be able to turn. If all are blocked it will still turn form 0 to 180.
+        Numbers that are very much larger than the degrees that the rays span might cause issues, unsure.
+        Numbers below the degrees that the rays span probably won't work, unsure.
+    EMERGENCY_TURN_DEGREES  : float -- What many degrees can it potentially turn in case of all rays being blocked.
+        
+    Methods:
+    Standard behaviour methods
+    """
+    MIN_DISTANCE_THRESHOLD = 2.0
+    MAX_DEGREES_TO_TURN = 56.25
+    EMERGENCY_TURN_DEGREES = 180
+
+    def __init__(self, aagent):
+        self.my_goal = None
+        super(BN_SmartTurning, self).__init__("BN_SmartTurning")
+        self.my_agent = aagent
+
+    def initialise(self) -> None:
+        sensor_information = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO]
+        possible_rotation_values=[]
+
+        #How many degrees of the turn each rays "controls", imagine the ray in the middle of a cone that is 2*"degrees_per_ray" degrees (2* because its that many degrees either side of the ray)
+        degrees_per_ray = self.MAX_DEGREES_TO_TURN/((NUM_RAYS_PER_SIDE*2)+1) # 2* because there are 2 sides, + 1 because there is one in the middle
+
+        for index, value in enumerate(sensor_information):
+            # it is an impassable object
+            if (not value # is null, which means there is no hit 
+                or  (value["distance"] >= self.MIN_DISTANCE_THRESHOLD 
+                or value["tag"] not in IMPASSABLE_OBJECT_TAGS)):  # if object is not impassable or it is not close
+                
+                #Store that ray's "controlled area" as a possible value for turning
+                possible_rotation_values.append(random.uniform(degrees_per_ray*(index-NUM_RAYS_PER_SIDE)-degrees_per_ray, degrees_per_ray*(index-NUM_RAYS_PER_SIDE)+degrees_per_ray))
+            
+        if not possible_rotation_values: # all rays are blocked
+            self.my_goal = asyncio.create_task(Goals_BT_Basic.Turn_customizable(self.my_agent,0,random.uniform(-self.EMERGENCY_TURN_DEGREES,self.EMERGENCY_TURN_DEGREES)).run())
+            return      
+        
+        #Some rays are not blocked and we'll randomly choose one of them, and follow it's random value for movement.
+        self.my_goal = asyncio.create_task(Goals_BT_Basic.Turn_customizable(self.my_agent,0,random.choice(possible_rotation_values)).run())
+
+    def update(self):
+       return common_goal_update(self.my_goal)
+
+    def terminate(self, new_status: common.Status):
+        # Finishing the behaviour, therefore we have to stop the associated task
+        #print("Terminate BN_TurnRandom")
+        self.logger.debug("Terminate BN_TurnRandom")
+        if self.my_goal!=None:
+            self.my_goal.cancel()
+
+
+
 ###### Roaming BNs Don't Touch Much #######
 
 class BN_ForwardRandom(pt.behaviour.Behaviour):
@@ -399,6 +517,7 @@ class BN_TurnRandom(pt.behaviour.Behaviour):
         self.logger.debug("Terminate BN_TurnRandom")
         if self.my_goal!=None:
             self.my_goal.cancel()
+
 
 
 ###### Detect Frozen BN Don't Touch Much #######
@@ -482,7 +601,7 @@ class BTAlone:
         ])
 
         #Check inventory when 2 return to base, then drop off flowers
-        store_flowers= pt.composites.Sequence(name="storeFlowers",memory=False) 
+        store_flowers= pt.composites.Sequence(name="StoreFlowers",memory=False) 
         store_flowers.add_children([
                                         BN_CheckInventory(aagent),
                                         return_to_base,
@@ -490,9 +609,20 @@ class BTAlone:
                                      ])
         
 
-        #TODO, idk if neccesary, improve roaming
-        roaming = pt.composites.Parallel(name="Parallel", policy=py_trees.common.ParallelPolicy.SuccessOnAll())
-        roaming.add_children([
+        smart_forward = pt.composites.Selector("SmartForward",memory=False)
+        smart_forward.add_children([
+                                    BN_IsForwardBlocked(aagent),
+                                    BN_ForwardRandom(aagent)
+                                 ])
+
+        smart_roaming =pt.composites.Parallel(name="SmartRoaming", policy=py_trees.common.ParallelPolicy.SuccessOnAll())
+        smart_roaming.add_children([
+                                    smart_forward,
+                                    BN_SmartTurning(aagent)
+        ])
+
+        random_roaming = pt.composites.Parallel(name="Parallel", policy=py_trees.common.ParallelPolicy.SuccessOnAll())
+        random_roaming.add_children([
                                 BN_ForwardRandom(aagent), 
                                 BN_TurnRandom(aagent)
                               ])
@@ -501,7 +631,7 @@ class BTAlone:
         false_root.add_children([
                                     store_flowers,
                                     flower_protocol,
-                                    roaming
+                                    smart_roaming
                                     ])
         
         
