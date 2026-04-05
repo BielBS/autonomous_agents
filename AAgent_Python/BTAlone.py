@@ -177,6 +177,7 @@ class BN_DropOffFlowers(pt.behaviour.Behaviour):
     """
     Uses a goal to drop off the flowers onto a nearby container
     SUCCESS if it drops off the flowers
+    FAILURE if MAX_ATTEMPTS is exeded without SUCCESS
     Else RUNNING
 
     Author -- Us
@@ -256,7 +257,6 @@ class BN_MoveToFlower(pt.behaviour.Behaviour):
 
     Attributes:
     TURN_DEGREES    : float -- The degrees between each ray, this way if you detect it on the first ray form the left the agent will turn TURN 2 TURN_DEGREES
-    FORWARD_MOVEMENT: int   -- How far to move forward when a flower is detected straight ahead.
     
     Methods:
     Standard behaviour methods.
@@ -264,7 +264,6 @@ class BN_MoveToFlower(pt.behaviour.Behaviour):
     """
 
     TURN_DEGREES = 11.25 # Ideally should be the degrees between each ray
-    FORWARD_MOVEMENT = 5 #Ideally should be until it hits a flower but for now it's ray length
 
     def __init__(self, aagent):
 
@@ -285,7 +284,7 @@ class BN_MoveToFlower(pt.behaviour.Behaviour):
                 #Flower's straight ahead
                 if index == 2:
                     #print("Flower forward")
-                    self.my_goal = asyncio.create_task(Goals_BT_Basic.ForwardDist(self.my_agent,self.FORWARD_MOVEMENT,0,5).run())
+                    self.my_goal = asyncio.create_task(Goals_BT_Basic.ForwardDist(self.my_agent,value["distance"],0,5).run())
                 else:
                     #print("Flower to the sides")
                     self.my_goal = asyncio.create_task(Goals_BT_Basic.Turn_customizable(self.my_agent,0,(index-2)*self.TURN_DEGREES).run())
@@ -306,7 +305,17 @@ class BN_MoveToFlower(pt.behaviour.Behaviour):
         if self.my_goal!= None:
             self.my_goal.cancel()
         
+"""
+tags to take into acount when improving roaming(CASE SENSITIVE!):
+    Wall (map edge)
+    Rock
 
+    (These are objects on each base)
+    Location    (floor of each base)
+    Container   (hitbox of where we store flowers)
+    Machine     (the visible "thing" that represents the container)
+
+"""
 ###### Roaming BNs Don't Touch Much #######
 
 class BN_ForwardRandom(pt.behaviour.Behaviour):

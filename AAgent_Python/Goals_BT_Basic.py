@@ -339,9 +339,11 @@ class Drop_Off_Flowers:
     Author -- Us
 
     Attributes:
-    a_agent : AAgent_BT.AAgent
+    MAX_ATTEMPTS    : int
+        Maximum number of attempts to send the action before concluding it's a failure 
+    a_agent         : AAgent_BT.AAgent
         The agent meant to perform the action.
-    amount : int
+    amount          : int
         The amount to drop off.
     intial_amount : int
         The amount of flowers the agent has upon creating the class
@@ -351,6 +353,7 @@ class Drop_Off_Flowers:
     __init__ -- intialization, recieves AAgent and amount to drop off.
     async run -- awaits 'leave action' inside a while loop.
     """
+    MAX_ATTEMPTS= 5
 
     def __init__(self,a_agent: AAgent,amount:int) -> None:
         self.a_agent=a_agent
@@ -365,7 +368,7 @@ class Drop_Off_Flowers:
     async def run(self):
         try:
             #await self.a_agent.send_message("action","ntm") # maybe this fixes the dropOff bug, no it does not
-            while True:
+            for _ in range(self.MAX_ATTEMPTS):
                 if getattr(self.a_agent.i_state, 'nearbyContainerInventory', False):
                     #print("Sending leave command...")
                     await self.a_agent.send_message("action","leave,AlienFlower,"+ str(self.amount_to_drop))
@@ -378,6 +381,9 @@ class Drop_Off_Flowers:
                             print("Drop off successful!")
                             return True
                     #print("Drop off not successful, retrying...")
+            #print("Drop off not successful, Max attempts reached, giving up.")
+            return False
+        
         except asyncio.CancelledError:
             print("***** TASK Drop_Off_Flowers CANCELLED")
             await self.a_agent.send_message("action", "stop")
