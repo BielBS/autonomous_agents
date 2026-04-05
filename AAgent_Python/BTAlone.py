@@ -276,19 +276,26 @@ class BN_MoveToFlower(pt.behaviour.Behaviour):
         print("BN_MoveToFlower Intializing")
         #We'll first store where the flowers are relative to the agent so that we can later prioritize ones over others to avoid constant target switching
         sensor_obj_info = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO]
+        rays_with_flowers=[]
+        distance_to_forward_flower=0.0
+
         for index, value in enumerate(sensor_obj_info):
             if value:  # there is a hit with an object
                 if value["tag"] != "AlienFlower":  # If it is a flower
                     continue
-            
-                #Flower's straight ahead
                 if index == 2:
-                    #print("Flower forward")
-                    self.my_goal = asyncio.create_task(Goals_BT_Basic.ForwardDist(self.my_agent,value["distance"],0,5).run())
-                else:
-                    #print("Flower to the sides")
-                    self.my_goal = asyncio.create_task(Goals_BT_Basic.Turn_customizable(self.my_agent,0,(index-2)*self.TURN_DEGREES).run())
-                break
+                    distance_to_forward_flower=value["distance"]
+
+                rays_with_flowers.append(index)
+
+
+        #Flower's straight ahead
+        if 2 in rays_with_flowers: #We prioritize moving forward if there is a flower straight ahead, else turn to the first flower from left to right.
+            #print("Flower forward")
+            self.my_goal = asyncio.create_task(Goals_BT_Basic.ForwardDist(self.my_agent,distance_to_forward_flower,0,5).run())
+        else:
+            #print("Flower to the sides")
+            self.my_goal = asyncio.create_task(Goals_BT_Basic.Turn_customizable(self.my_agent,0,(rays_with_flowers[0]-2)*self.TURN_DEGREES).run())
 
     def update(self):
         #TODO remove temp
