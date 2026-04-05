@@ -273,7 +273,7 @@ class Walk_To:
     """
     Walks to a given destination using the navMesh
 
-    BUG: When it finally returns to base the agent doesn't seem to stop, if you move it manually it will continue to walk_to base
+    BUG: When it finally returns to base the agent doesn't seem to stop, if you move it manually it will continue to walk_to base, sometimes
     
     Author -- Us
 
@@ -336,8 +336,6 @@ class Drop_Off_Flowers:
     """
     Sends 'leave,AlienFlower,x' command where x is the desired amount set at init.
 
-    BUG: Currently not working
-    
     Author -- Us
 
     Attributes:
@@ -370,7 +368,7 @@ class Drop_Off_Flowers:
             while True:
                 if getattr(self.a_agent.i_state, 'nearbyContainerInventory', False):
                     #print("Sending leave command...")
-                    await self.a_agent.send_message("action","leave,AlienFlower,2") #+ str(self.amount_to_drop)) test to see if for some reason this is the issue
+                    await self.a_agent.send_message("action","leave,AlienFlower,"+ str(self.amount_to_drop))
                     await asyncio.sleep(2)
                     #print(f"Inventory after send: {self.a_agent.i_state.myInventoryList}")
 
