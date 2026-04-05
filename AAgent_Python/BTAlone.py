@@ -104,13 +104,10 @@ class BN_IsInBaseNearContainer(pt.behaviour.Behaviour):
 
 class BN_ReturnToBase(pt.behaviour.Behaviour):
     """
-    Goal based BN, returns to base via navMesh.
+    Goal based BN, returns to the nearest base as the crow flies via navMesh.
     SUCCESS on reaching destination.
     RUNNING while on the way to destination.
-
     
-    NOTE: Currently only walks to the Alpha base, later on we can make it walk to the nearest base.
-
     Author -- Us
 
     Methods:
@@ -124,7 +121,23 @@ class BN_ReturnToBase(pt.behaviour.Behaviour):
 
     def initialise(self) -> None:
         print("BN_ReturnToBase Intialising")
-        self.my_goal= asyncio.create_task(Goals_BT_Basic.Walk_To(self.my_agent,"BaseAlpha").run())
+        #Fallback go to BaseAlpha
+        chosen_base= "BaseAlpha"
+        if self.my_agent.i_state.position["z"] > 0.0:
+            if self.my_agent.i_state.position["x"] > 0.0:
+                chosen_base="BaseDelta"
+            if self.my_agent.i_state.position["x"] < 0.0:
+                chosen_base="BaseGamma"
+        
+        
+        if self.my_agent.i_state.position["z"] < 0.0:
+            if self.my_agent.i_state.position["x"] > 0.0:
+                chosen_base="BaseAlpha"
+            if self.my_agent.i_state.position["x"] < 0.0:
+                chosen_base="BaseBeta"
+                #Yes, we could remove this check and everything would work but I'll leave it here for ease of understanding
+
+        self.my_goal= asyncio.create_task(Goals_BT_Basic.Walk_To(self.my_agent,chosen_base).run())
 
     def update(self) -> pt.common.Status:
         #TODO remove temp
