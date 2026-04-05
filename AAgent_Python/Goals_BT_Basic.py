@@ -131,7 +131,14 @@ class ForwardDist:
                     return False
         except asyncio.CancelledError:
             print("***** TASK Forward CANCELLED")
-            await self.a_agent.send_message("action", "ntm")
+            if self.a_agent.i_state.movingForwards: 
+                #This is an atempt to fix the stuttering bug, it seems to work but it created a smaller
+                # BUG: Everytime the agent would stutter to collect a flower it now stops, thinks for a second and then colects it
+                #       This is because we avoid 1 NTM but not both.
+                # The original bug is still present in some form or another since MoveToFLower still becomes INVALID when it shouldn't
+                await self.a_agent.send_message("action", "ntm")
+            else:
+                print("NTM avoided.")
             self.state = self.STOPPED
 
 # I have DELETED the given Turn class, the Turn_customizable class is it's replacement it does the same thing but instead of using random values it uses given ones

@@ -230,6 +230,7 @@ class BN_DetectFlower(pt.behaviour.Behaviour):
         self.my_agent = aagent
 
     def initialise(self):
+        #print("Intialising BN_DetectFlower")
         pass
 
     def update(self):
@@ -283,7 +284,9 @@ class BN_MoveToFlower(pt.behaviour.Behaviour):
             if value:  # there is a hit with an object
                 if value["tag"] != "AlienFlower":  # If it is a flower
                     continue
-                if index == 2:
+
+                if index == 2: 
+                    # We only need to know the distance if we'll move forward
                     distance_to_forward_flower=value["distance"]
 
                 rays_with_flowers.append(index)
@@ -348,7 +351,7 @@ class BN_ForwardRandom(pt.behaviour.Behaviour):
         self.my_agent = aagent
 
     def initialise(self):
-       #print("BN_ForwardRandom Initialize")
+        print("BN_ForwardRandom Initialize")
         self.logger.debug("Create Goals_BT.ForwardDist task")
         self.my_goal = asyncio.create_task(Goals_BT_Basic.ForwardDist(self.my_agent, -1, 1, 5).run())
 
@@ -384,7 +387,7 @@ class BN_TurnRandom(pt.behaviour.Behaviour):
         self.my_agent = aagent
 
     def initialise(self):
-       #print("BN_TurnRandom Intialize")
+        print("BN_TurnRandom Intialize")
         self.my_goal = asyncio.create_task(Goals_BT_Basic.Turn_customizable(self.my_agent,random.choice([-1,1]),random.uniform(0,180)).run())
 
     def update(self):
@@ -500,6 +503,8 @@ class BTAlone:
                                     flower_protocol,
                                     roaming
                                     ])
+        
+        
         
 
         self.root = pt.composites.Selector(name="Selector", memory=False)
