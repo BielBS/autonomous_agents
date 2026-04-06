@@ -7,7 +7,7 @@ import py_trees as pt
 from py_trees import common
 
 import BTAlone
-import BTSmartRoam
+import AAgent_Python.BNs_SmartRoam as BNs_SmartRoam
 import Goals_BT_Basic
 import Sensors
 
@@ -338,7 +338,7 @@ class BTCritter:
             ]),
         ])
 
-        smart_roaming = BTSmartRoam.create_roaming_subtree(
+        smart_roaming = BNs_SmartRoam.create_roaming_subtree(
             aagent,
             name="SmartRoaming",
             extra_impassable_tags={"AlienFlower"},
