@@ -436,34 +436,6 @@ class BN_MoveToFlower(pt.behaviour.Behaviour):
             self.my_goal.cancel()
         
 
-class BN_DetectFrozen(pt.behaviour.Behaviour):  
-    """
-    Detects if the internal state of the agent 'isFrozen' is set to True.
-    SUCCESS if it is frozen
-    else FAILURE
-
-    Author -- Professor
-
-    Methods: 
-    Standard behaviour methods.
-    """
-    def __init__(self, aagent):      
-        self.my_goal = None      
-          #print("Initializing BN_DetectInventoryFull")      
-        super(BN_DetectFrozen, self).__init__("BN_DetectFrozen")
-        self.my_agent = aagent
-        self.i_state = aagent.i_state
-    def initialise(self):
-        pass 
-
-    def update(self):   
-        if self.i_state.isFrozen: 
-            return pt.common.Status.SUCCESS
-        return pt.common.Status.FAILURE
-    def terminate(self, new_status: common.Status):
-        pass
-
-
 class BTAlone:
     """
     
