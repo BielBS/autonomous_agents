@@ -4,6 +4,10 @@ import asyncio
 import time
 import Sensors
 from collections import Counter
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from AAgent_BT import AAgent
 
 def calculate_distance(point_a, point_b):
     """
@@ -15,6 +19,16 @@ def calculate_distance(point_a, point_b):
                          (point_b['y'] - point_a['y']) ** 2 +
                          (point_b['z'] - point_a['z']) ** 2)
     return distance
+
+
+def get_inventory_amount(inventory, item_name="AlienFlower"):
+    """
+    Returns the amount stored for a given inventory item.
+    """
+    return next(
+        (item["amount"] for item in inventory if item["name"] == item_name),
+        0
+    )
 
 class DoNothing:
     """
@@ -141,6 +155,60 @@ class ForwardDist:
                 print("NTM avoided.")
             self.state = self.STOPPED
 
+
+class BackwardDist:
+    """
+        Moves backward a certain distance specified in the parameter "dist".
+        If "dist" is -1, selects a random distance between the initial
+        parameters of the class "d_min" and "d_max"
+    """
+    STOPPED = 0
+    MOVING = 1
+
+    def __init__(self, a_agent, dist, d_min, d_max):
+        self.a_agent = a_agent
+        self.rc_sensor = a_agent.rc_sensor
+        self.i_state = a_agent.i_state
+        self.original_dist = dist
+        self.target_dist = dist
+        self.d_min = d_min
+        self.d_max = d_max
+        self.starting_pos = a_agent.i_state.position
+        self.state = self.STOPPED
+
+    async def run(self):
+        try:
+            previous_dist = 0.0
+            while True:
+                if self.state == self.STOPPED:
+                    self.starting_pos = self.a_agent.i_state.position
+                    if self.original_dist < 0:
+                        self.target_dist = random.uniform(self.d_min, self.d_max)
+                    else:
+                        self.target_dist = self.original_dist
+                    await self.a_agent.send_message("action", "mb")
+                    self.state = self.MOVING
+                elif self.state == self.MOVING:
+                    await asyncio.sleep(0.25)
+                    current_dist = calculate_distance(self.starting_pos, self.i_state.position)
+                    if current_dist >= self.target_dist:
+                        await self.a_agent.send_message("action", "ntm")
+                        self.state = self.STOPPED
+                        return True
+                    elif previous_dist == current_dist:
+                        await self.a_agent.send_message("action", "ntm")
+                        self.state = self.STOPPED
+                        return False
+                    previous_dist = current_dist
+                else:
+                    print("Unknown state: " + str(self.state))
+                    return False
+        except asyncio.CancelledError:
+            print("***** TASK Backward CANCELLED")
+            if self.a_agent.i_state.movingBackwards:
+                await self.a_agent.send_message("action", "ntm")
+            self.state = self.STOPPED
+
 # I have DELETED the given Turn class, the Turn_customizable class is it's replacement it does the same thing but instead of using random values it uses given ones
 # to recreate the previous class simply create a Turn_customaizable(a_agent,random.choice([-1,1]),random.uniform(1,180))
 ########## New Goals from here downward #########
@@ -226,7 +294,7 @@ class Turn_customizable:
                 elif self.state == self.TURNING:
                     # check if we have finished the rotation
                     current_heading = self.i_state.rotation["y"]
-                    final_condition = abs(current_heading - self.new_heading)
+                    final_condition = abs((current_heading - self.new_heading + 180) % 360 - 180)
                     if final_condition < self.TURN_THRESHOLD:
                         await self.a_agent.send_message("action", "nt")
                         current_heading = self.i_state.rotation["y"]
@@ -239,8 +307,12 @@ class Turn_customizable:
             print("***** TASK Turn_customizable CANCELLED")
             await self.a_agent.send_message("action", "nt")
 
-
-from AAgent_BT import AAgent
+class Turn(Turn_customizable):
+    """
+    Backwards-compatible version of the example Turn goal.
+    """
+    def __init__(self, a_agent):
+        super().__init__(a_agent, random.choice([-1, 1]), random.uniform(0, 180))
 
 
 class Teleport_To:
@@ -263,13 +335,14 @@ class Teleport_To:
     asnyc run -- inside a while loop sends the action to teleport, stops all actions if canceled 
     """
 
-    def __init__(self,a_agent:AAgent,destination:str) -> None:
+    def __init__(self, a_agent: "AAgent", destination: str) -> None:
         self.a_agent=a_agent
         self.destination=destination
 
     async def run(self):
         try:
             await self.a_agent.send_message("action","teleport_to," + self.destination)
+            return True
         except asyncio.CancelledError:
             print("***** TASK Teleport_To CANCELLED")
             await self.a_agent.send_message("action", "stop")
@@ -301,7 +374,7 @@ class Walk_To:
 
     VALID_LOCATIONS=["BaseAlpha","BaseBeta","BaseGamma","BaseDelta"]
 
-    def __init__(self,a_agent:AAgent,destination:str) -> None:
+    def __init__(self, a_agent: "AAgent", destination: str) -> None:
         self.a_agent=a_agent
         self.destination=destination
 
@@ -327,7 +400,8 @@ class Walk_To:
                 await asyncio.sleep(0.1) 
                 
                 if (self.a_agent.i_state.currentNamedLoc == self.destination
-                    and self.a_agent.i_state.nearbyContainerInventory):
+                    and (not self.destination.startswith("Base")
+                         or self.a_agent.i_state.nearbyContainerInventory)):
                     #await self.a_agent.send_message("action","stop") #Just in case
                     return True
                 
@@ -362,14 +436,10 @@ class Drop_Off_Flowers:
     """
     MAX_ATTEMPTS= 5
 
-    def __init__(self,a_agent: AAgent,amount:int) -> None:
+    def __init__(self, a_agent: "AAgent", amount: int) -> None:
         self.a_agent=a_agent
         self.amount_to_drop =amount
-        self.initial_amount=0
-
-        inventory=self.a_agent.i_state.myInventoryList
-        if inventory[0]["name"] == "AlienFlower":
-            self.initial_amount =inventory[0]["amount"]
+        self.initial_amount = get_inventory_amount(self.a_agent.i_state.myInventoryList)
         print("Initial ammount:",self.initial_amount)
 
     async def run(self):
@@ -382,11 +452,10 @@ class Drop_Off_Flowers:
                     await asyncio.sleep(2)
                     #print(f"Inventory after send: {self.a_agent.i_state.myInventoryList}")
 
-                    inventory=self.a_agent.i_state.myInventoryList #Changed this from a for loop to just looking at the first (and only) slot to see if it fixes the dropOff bug
-                    if inventory[0]["name"] == "AlienFlower":
-                        if inventory[0]["amount"] <= (self.initial_amount - self.amount_to_drop) or inventory[0]["amount"] == 0:
-                            print("Drop off successful!")
-                            return True
+                    current_amount = get_inventory_amount(self.a_agent.i_state.myInventoryList)
+                    if current_amount <= max(0, self.initial_amount - self.amount_to_drop):
+                        print("Drop off successful!")
+                        return True
                     #print("Drop off not successful, retrying...")
             #print("Drop off not successful, Max attempts reached, giving up.")
             return False

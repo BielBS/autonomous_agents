@@ -9,6 +9,8 @@ import Sensors
 import Goals_BT_Basic
 import BTRoam
 import BTAlone
+import BTCollectRun
+import BTCritter
 
 import tkinter as tk
 from threading import Thread
@@ -134,6 +136,7 @@ class AAgent:
         # Extract the parameters of the agent from the config dictionary
         self.AgentParameters = self.config['AgentParameters']
         self.python_gui_monitor = self.config['Misc']['python_gui_monitor']
+        self.initial_task = self.AgentParameters.get("initial_task", "").strip()
 
         # URL to connect with Unity
         self.url = f"ws://{self.config['Server']['host']}:{self.config['Server']['port']}/"
@@ -166,7 +169,9 @@ class AAgent:
         # Reference to the possible behaviour trees the agent can execute
         self.bts = {
             "BTRoam": BTRoam.BTRoam(self),
-            "BTAlone": BTAlone.BTAlone(self)
+            "BTAlone": BTAlone.BTAlone(self),
+            "BTCollectRun": BTCollectRun.BTCollectRun(self),
+            "BTCritter": BTCritter.BTCritter(self),
         }
 
         # Active goal
@@ -174,10 +179,35 @@ class AAgent:
         self.currentGoalTask = None
 
         # Active behaviour tree
-        self.currentBT = "BTAlone" #TODO Check if this has to be None (as was before) or our BT as is now.
+        self.currentBT = None
 
         # Individual actions pending execution
         self.pendingActions = deque()
+
+        self._load_initial_task()
+
+    def _load_initial_task(self):
+        """
+        Loads the task declared in the agent config so it starts automatically
+        once the simulation begins running.
+        """
+        if not self.initial_task:
+            return
+
+        try:
+            command, data = self.initial_task.split(":", 1)
+        except ValueError:
+            print(f"Invalid initial_task: {self.initial_task}")
+            return
+
+        if command == "action":
+            self.pendingActions.append(data)
+        elif command == "goal":
+            self.currentGoal = data
+        elif command == "bt":
+            self.currentBT = data
+        else:
+            print(f"Unknown initial_task command: {self.initial_task}")
 
     async def open_websocket(self):
         """
@@ -216,7 +246,13 @@ class AAgent:
         msg_json = json.dumps(msg)
         if msg_type == "action": #TODO comment back up again after testing
             print(msg_content)
-        await self.ws.send_str(msg_json)
+        if self.ws is None or self.ws.closed:
+            return
+        try:
+            await self.ws.send_str(msg_json)
+        except (aiohttp.ClientConnectionError, ConnectionResetError, RuntimeError):
+            # The websocket can be closing while cancelled tasks try to send a final stop/turn action.
+            return
 
     async def receive_messages(self):
         """

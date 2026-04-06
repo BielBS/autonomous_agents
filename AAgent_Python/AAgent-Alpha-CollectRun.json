@@ -4,18 +4,18 @@
     "port": 4649
   },
   "AgentParameters": {
-    "type": "AAgentAstronautBeta",
-    "name": "Beta",
-    "team": "Beta",
+    "type": "AAgentAstronautAlpha",
+    "name": "Alpha",
+    "team": "Alpha",
     "interactable": true,
     "spawn_area": "",
-    "spawn_point": "SpawnBeta",
+    "spawn_point": "SpawnAlpha",
     "debug_mode": true,
     "manual_control": false,
     "initial_task": "bt:BTCollectRun",
-    "ray_perception_sensor_param": [2,45,0,5]
+    "ray_perception_sensor_param": [3,90,0,6]
   },
   "Misc": {
-    "python_gui_monitor": false
+    "python_gui_monitor": true
   }
 }

@@ -6,13 +6,11 @@ import py_trees as pt
 from py_trees import common
 import Goals_BT_Basic
 import Sensors
+import BTSmartRoam
 
 
 """IMPASSABLE_OBJECT_TAGS   : list[str] -- A list containing all impassable object tags that the agent should avoid."""
 IMPASSABLE_OBJECT_TAGS = ["Wall","Rock","Machine"]
-
-"""NUM_RAYS_PER_SIDE        : int       -- The number of sensor rays defined per side in the json. This is used to get the front facing ray. Is equivalent to front ray index"""
-NUM_RAYS_PER_SIDE = 2 #Ideally this should be read from somewhere
 
 
 def common_goal_update(goal) -> pt.common.Status:
@@ -63,6 +61,115 @@ class BN_DoNothing(pt.behaviour.Behaviour):
         # Finishing the behaviour, therefore we have to stop the associated task
         print("Terminate DoNothing")
         if self.my_goal!=None:
+            self.my_goal.cancel()
+
+
+class AloneRecoveryMemory:
+    def __init__(self):
+        self.was_frozen = False
+        self.pending_recovery = False
+
+
+class BN_DetectFrozenState(pt.behaviour.Behaviour):
+    def __init__(self, aagent, memory):
+        super(BN_DetectFrozenState, self).__init__("BN_DetectFrozenState")
+        self.my_agent = aagent
+        self.memory = memory
+
+    def initialise(self):
+        pass
+
+    def update(self):
+        if self.my_agent.i_state.isFrozen:
+            self.memory.was_frozen = True
+            return pt.common.Status.SUCCESS
+
+        if self.memory.was_frozen:
+            self.memory.was_frozen = False
+            self.memory.pending_recovery = True
+
+        return pt.common.Status.FAILURE
+
+    def terminate(self, new_status: common.Status):
+        pass
+
+
+class BN_WaitUntilThawed(pt.behaviour.Behaviour):
+    def __init__(self, aagent):
+        super(BN_WaitUntilThawed, self).__init__("BN_WaitUntilThawed")
+        self.my_agent = aagent
+
+    def initialise(self):
+        asyncio.create_task(self.my_agent.send_message("action", "stop"))
+
+    def update(self):
+        if self.my_agent.i_state.isFrozen:
+            return pt.common.Status.RUNNING
+        return pt.common.Status.SUCCESS
+
+    def terminate(self, new_status: common.Status):
+        pass
+
+
+class BN_ShouldRecoverAfterFreeze(pt.behaviour.Behaviour):
+    def __init__(self, memory):
+        super(BN_ShouldRecoverAfterFreeze, self).__init__("BN_ShouldRecoverAfterFreeze")
+        self.memory = memory
+
+    def initialise(self):
+        pass
+
+    def update(self):
+        if self.memory.pending_recovery:
+            self.memory.pending_recovery = False
+            return pt.common.Status.SUCCESS
+        return pt.common.Status.FAILURE
+
+    def terminate(self, new_status: common.Status):
+        pass
+
+
+class BN_ForcedRecoverAfterHit(pt.behaviour.Behaviour):
+    def __init__(self, aagent):
+        super(BN_ForcedRecoverAfterHit, self).__init__("BN_ForcedRecoverAfterHit")
+        self.my_agent = aagent
+        self.my_goal = None
+
+    async def _run_recovery(self):
+        await self.my_agent.send_message("action", "stop")
+        await asyncio.sleep(0)
+
+        backed_off = await Goals_BT_Basic.BackwardDist(
+            self.my_agent,
+            random.uniform(1.0, 1.8),
+            0,
+            0,
+        ).run()
+
+        turned = await Goals_BT_Basic.Turn_customizable(
+            self.my_agent,
+            0,
+            random.choice([-1, 1]) * random.uniform(120, 165),
+        ).run()
+        if not turned:
+            return False
+
+        escaped = await Goals_BT_Basic.ForwardDist(
+            self.my_agent,
+            random.uniform(3.5, 5.0),
+            0,
+            0,
+        ).run()
+        return bool(backed_off or escaped)
+
+    def initialise(self):
+        self.my_goal = asyncio.create_task(self._run_recovery())
+
+    def update(self):
+        return common_goal_update(self.my_goal)
+
+    def terminate(self, new_status: common.Status):
+        if self.my_goal != None:
             self.my_goal.cancel()
 #### Return To Base BNs #####
 
@@ -175,17 +282,8 @@ class BN_CheckInventory(pt.behaviour.Behaviour):
         pass
 
     def update(self) -> pt.common.Status:
-        inventory=self.my_agent.i_state.myInventoryList
-
-        for _, value in enumerate(inventory):
-            if value["name"] != "AlienFlower":
-                continue
-
-            if value["amount"] >= self.return_threshold:
-                return pt.common.Status.SUCCESS
-            
-            #There should only be 1 AlienFlower "slot", no need to iterate over the whole inventory
-            break
+        if Goals_BT_Basic.get_inventory_amount(self.my_agent.i_state.myInventoryList) >= self.return_threshold:
+            return pt.common.Status.SUCCESS
         
         #The agent doesn't have more than self.return_threshold Flowers
         return pt.common.Status.FAILURE
@@ -284,8 +382,6 @@ class BN_MoveToFlower(pt.behaviour.Behaviour):
     
     """
 
-    TURN_DEGREES = 11.25 # Ideally should be the degrees between each ray
-
     def __init__(self, aagent):
 
         self.my_goal = None
@@ -297,15 +393,17 @@ class BN_MoveToFlower(pt.behaviour.Behaviour):
         print("BN_MoveToFlower Intializing")
         #We'll first store where the flowers are relative to the agent so that we can later prioritize ones over others to avoid constant target switching
         sensor_obj_info = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO]
+        sensor_angles = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.ANGLE]
         rays_with_flowers=[]
         distance_to_forward_flower=0.0
+        central_ray_index = self.my_agent.rc_sensor.central_ray_index
 
         for index, value in enumerate(sensor_obj_info):
             if value:  # there is a hit with an object
                 if value["tag"] != "AlienFlower":  # If it is a flower
                     continue
 
-                if index == 2: 
+                if index == central_ray_index:
                     # We only need to know the distance if we'll move forward
                     distance_to_forward_flower=value["distance"]
 
@@ -313,12 +411,14 @@ class BN_MoveToFlower(pt.behaviour.Behaviour):
 
 
         #Flower's straight ahead
-        if 2 in rays_with_flowers: #We prioritize moving forward if there is a flower straight ahead, else turn to the first flower from left to right.
+        if central_ray_index in rays_with_flowers: #We prioritize moving forward if there is a flower straight ahead, else turn to the first flower from left to right.
             #print("Flower forward")
             self.my_goal = asyncio.create_task(Goals_BT_Basic.ForwardDist(self.my_agent,distance_to_forward_flower,0,5).run())
-        else:
+        elif rays_with_flowers:
             #print("Flower to the sides")
-            self.my_goal = asyncio.create_task(Goals_BT_Basic.Turn_customizable(self.my_agent,0,(rays_with_flowers[0]-2)*self.TURN_DEGREES).run())
+            self.my_goal = asyncio.create_task(
+                Goals_BT_Basic.Turn_customizable(self.my_agent, 0, sensor_angles[rays_with_flowers[0]]).run()
+            )
 
     def update(self):
         #TODO remove temp
@@ -375,7 +475,7 @@ class BN_IsForwardBlocked(pt.behaviour.Behaviour):
 
     def update(self) -> pt.common.Status:
         #This might not seem intuitive but it gets the middle ray always. This is because if there are X number of rays per side the forward facing one is X+1, but since we start counting at 0 it's X
-        front_ray_sensor = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO][NUM_RAYS_PER_SIDE] 
+        front_ray_sensor = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO][self.my_agent.rc_sensor.central_ray_index]
         
         if front_ray_sensor:  # there is a hit with an object
             if front_ray_sensor["tag"] in IMPASSABLE_OBJECT_TAGS:
@@ -424,10 +524,9 @@ class BN_SmartTurning(pt.behaviour.Behaviour):
 
     def initialise(self) -> None:
         sensor_information = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO]
+        sensor_angles = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.ANGLE]
         possible_rotation_values=[]
-
-        #How many degrees of the turn each rays "controls", imagine the ray in the middle of a cone that is 2*"degrees_per_ray" degrees (2* because its that many degrees either side of the ray)
-        degrees_per_ray = self.MAX_DEGREES_TO_TURN/((NUM_RAYS_PER_SIDE*2)+1) # 2* because there are 2 sides, + 1 because there is one in the middle
+        max_angle = self.my_agent.rc_sensor.max_ray_degrees
 
         for index, value in enumerate(sensor_information):
             # it is an impassable object
@@ -436,7 +535,10 @@ class BN_SmartTurning(pt.behaviour.Behaviour):
                 or value["tag"] not in IMPASSABLE_OBJECT_TAGS)):  # if object is not impassable or it is not close
                 
                 #Store that ray's "controlled area" as a possible value for turning
-                possible_rotation_values.append(random.uniform(degrees_per_ray*(index-NUM_RAYS_PER_SIDE)-degrees_per_ray, degrees_per_ray*(index-NUM_RAYS_PER_SIDE)+degrees_per_ray))
+                base_angle = sensor_angles[index]
+                left_bound = -max_angle if index == 0 else (sensor_angles[index - 1] + base_angle) / 2
+                right_bound = max_angle if index == len(sensor_angles) - 1 else (sensor_angles[index + 1] + base_angle) / 2
+                possible_rotation_values.append(random.uniform(left_bound, right_bound))
             
         if not possible_rotation_values: # all rays are blocked
             self.my_goal = asyncio.create_task(Goals_BT_Basic.Turn_customizable(self.my_agent,0,random.uniform(-self.EMERGENCY_TURN_DEGREES,self.EMERGENCY_TURN_DEGREES)).run())
@@ -593,10 +695,20 @@ class BTAlone:
     def __init__(self, aagent):
         # py_trees.logging.level = py_trees.logging.Level.DEBUG
 
-        self.aagent = aagent      
+        self.aagent = aagent
+        self.recovery_memory = AloneRecoveryMemory()
 
-        frozen=  pt.composites.Sequence(name="DetectFrozen", memory=True)
-        frozen.add_children([BN_DetectFrozen(aagent), BN_DoNothing(aagent)])
+        frozen = pt.composites.Sequence(name="DetectFrozen", memory=True)
+        frozen.add_children([
+            BN_DetectFrozenState(aagent, self.recovery_memory),
+            BN_WaitUntilThawed(aagent),
+        ])
+
+        recover_from_hit = pt.composites.Sequence(name="RecoverFromHit", memory=True)
+        recover_from_hit.add_children([
+            BN_ShouldRecoverAfterFreeze(self.recovery_memory),
+            BN_ForcedRecoverAfterHit(aagent),
+        ])
 
         
         # Detect the flower, once detected turn towards it, once facing it move forward
@@ -614,7 +726,7 @@ class BTAlone:
         ])
 
         #Check inventory when 2 return to base, then drop off flowers
-        store_flowers= pt.composites.Sequence(name="StoreFlowers",memory=False) 
+        store_flowers= pt.composites.Sequence(name="StoreFlowers",memory=True) 
         store_flowers.add_children([
                                         BN_CheckInventory(aagent),
                                         return_to_base,
@@ -622,17 +734,13 @@ class BTAlone:
                                      ])
         
 
-        smart_forward = pt.composites.Selector("SmartForward",memory=False)
-        smart_forward.add_children([
-                                    BN_IsForwardBlocked(aagent),
-                                    BN_ForwardRandom(aagent)
-                                 ])
-
-        smart_roaming =pt.composites.Parallel(name="SmartRoaming", policy=py_trees.common.ParallelPolicy.SuccessOnAll())
-        smart_roaming.add_children([
-                                    smart_forward,
-                                    BN_SmartTurning(aagent)
-        ])
+        smart_roaming = BTSmartRoam.create_roaming_subtree(
+            aagent,
+            name="SmartRoaming",
+            avoid_side_walls=True,
+            side_wall_distance=2.0,
+            center_bias_weight=1.1,
+        )
 
         random_roaming = pt.composites.Parallel(name="Parallel", policy=py_trees.common.ParallelPolicy.SuccessOnAll())
         random_roaming.add_children([
@@ -651,7 +759,7 @@ class BTAlone:
         
 
         self.root = pt.composites.Selector(name="Selector", memory=False)
-        self.root.add_children([frozen, false_root])
+        self.root.add_children([frozen, recover_from_hit, false_root])
 
 
         self.behaviour_tree = pt.trees.BehaviourTree(self.root)

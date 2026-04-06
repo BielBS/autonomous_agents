@@ -1,1 +1,6 @@
 .vscode/launch.json
+__pycache__/
+*.pyc
+V0.4.1-AAPE-Win/
+.venv/
+logs/

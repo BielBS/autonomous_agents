@@ -12,8 +12,8 @@
     "spawn_point": "",
     "debug_mode": true,
     "manual_control": false,
-    "initial_task": "",
-    "ray_perception_sensor_param": [2,45,0,5]
+    "initial_task": "bt:BTCritter",
+    "ray_perception_sensor_param": [4,60,0,6]
   },
   "Misc": {
     "python_gui_monitor": false

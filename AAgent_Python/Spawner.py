@@ -4,6 +4,7 @@ import subprocess
 import signal
 import sys
 import asyncio
+from pathlib import Path
 from AAgent_BT import AAgent
 
 
@@ -14,15 +15,17 @@ def load_config(json_file):
 
 def start_agents(config_file):
     config = load_config(config_file)
+    config_dir = Path(config_file).resolve().parent
 
     all_agents = []
     packs = config.get('packs', [])
     for pack in packs:
         agent_config_file = pack.get("agent_config_file", "")
         num_agents = pack.get("num_agents", 1)
+        agent_config_path = config_dir / agent_config_file
 
         # Create multiple AAgent instances
-        agents_in_pack = [AAgent(agent_config_file) for _ in range(num_agents)]
+        agents_in_pack = [AAgent(str(agent_config_path)) for _ in range(num_agents)]
 
         all_agents.extend(agents_in_pack)
 
