@@ -3,6 +3,7 @@ import random
 import asyncio
 import Sensors
 from typing import TYPE_CHECKING
+from Utils import get_inventory_amount
 
 if TYPE_CHECKING:
     from AAgent_BT import AAgent
@@ -18,15 +19,6 @@ def calculate_distance(point_a, point_b):
                          (point_b['z'] - point_a['z']) ** 2)
     return distance
 
-
-def get_inventory_amount(inventory, item_name="AlienFlower"):
-    """
-    Returns the amount stored for a given inventory item.
-    """
-    return next(
-        (item["amount"] for item in inventory if item["name"] == item_name),
-        0
-    )
 
 class DoNothing:
     """

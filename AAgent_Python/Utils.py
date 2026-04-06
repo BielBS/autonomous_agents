@@ -21,3 +21,12 @@ def common_goal_update(goal) -> pt.common.Status:
 
     return pt.common.Status.SUCCESS if goal.result() else pt.common.Status.FAILURE
 
+
+def get_inventory_amount(inventory, item_name="AlienFlower"):
+    """
+    Returns the amount stored for a given inventory item.
+    """
+    return next(
+        (item["amount"] for item in inventory if item["name"] == item_name),
+        0
+    )

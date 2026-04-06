@@ -6,6 +6,7 @@ import Goals_BT_Basic
 import Sensors
 import BNs_SmartRoam 
 from Utils import common_goal_update
+from Utils import get_inventory_amount
 
 ###### Do Nothing BN #####
 
@@ -252,7 +253,7 @@ class BN_CheckInventory(pt.behaviour.Behaviour):
         pass
 
     def update(self) -> pt.common.Status:
-        if Goals_BT_Basic.get_inventory_amount(self.my_agent.i_state.myInventoryList) >= self.return_threshold:
+        if get_inventory_amount(self.my_agent.i_state.myInventoryList) >= self.return_threshold:
             return pt.common.Status.SUCCESS
         
         #The agent doesn't have more than self.return_threshold Flowers
