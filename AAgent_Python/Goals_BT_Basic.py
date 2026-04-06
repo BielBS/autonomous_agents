@@ -1,9 +1,7 @@
 import math
 import random
 import asyncio
-import time
 import Sensors
-from collections import Counter
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
