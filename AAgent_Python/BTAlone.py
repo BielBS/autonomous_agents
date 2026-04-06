@@ -1,16 +1,10 @@
 import asyncio
 import random
-from typing import Literal
-import py_trees
 import py_trees as pt
 from py_trees import common
 import Goals_BT_Basic
 import Sensors
 import BNs_SmartRoam 
-
-
-"""IMPASSABLE_OBJECT_TAGS   : list[str] -- A list containing all impassable object tags that the agent should avoid."""
-IMPASSABLE_OBJECT_TAGS = ["Wall","Rock","Machine"]
 
 
 def common_goal_update(goal) -> pt.common.Status:
