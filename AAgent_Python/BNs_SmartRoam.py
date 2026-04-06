@@ -7,6 +7,7 @@ from py_trees import common
 import Goals_BT_Basic
 import Sensors
 
+from Utils import common_goal_update
 
 IMPASSABLE_OBJECT_TAGS = {"Wall", "Rock", "Machine"}
 
@@ -33,15 +34,6 @@ class RoamMemory:
         self.side_wall_distance = side_wall_distance
         self.center_bias_weight = center_bias_weight
 
-
-def common_goal_update(goal) -> pt.common.Status:
-    if goal is None:
-        return pt.common.Status.FAILURE
-
-    if not goal.done():
-        return pt.common.Status.RUNNING
-
-    return pt.common.Status.SUCCESS if goal.result() else pt.common.Status.FAILURE
 
 
 def _is_impassable(ray_info, memory):

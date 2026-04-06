@@ -5,31 +5,7 @@ from py_trees import common
 import Goals_BT_Basic
 import Sensors
 import BNs_SmartRoam 
-
-
-def common_goal_update(goal) -> pt.common.Status:
-    """
-    Common update for goal based BN.
-
-    Author -- Us
-
-    Returns:
-    FAILURE if goal is None
-    RUNNING if goal is not done
-    SUCCESS if goal result is True
-    Else FAILURE
-    """
-    if goal == None:
-            return pt.common.Status.FAILURE
-        
-    if not goal.done():
-        return pt.common.Status.RUNNING
-
-    res = goal.result()
-    if res:
-        return pt.common.Status.SUCCESS
-
-    return pt.common.Status.FAILURE
+from Utils import common_goal_update
 
 ###### Do Nothing BN #####
 
