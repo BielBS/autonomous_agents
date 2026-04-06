@@ -6,7 +6,7 @@ import py_trees as pt
 from py_trees import common
 import Goals_BT_Basic
 import Sensors
-import AAgent_Python.BNs_SmartRoam as BNs_SmartRoam
+import BNs_SmartRoam 
 
 
 """IMPASSABLE_OBJECT_TAGS   : list[str] -- A list containing all impassable object tags that the agent should avoid."""

@@ -7,7 +7,7 @@ import py_trees as pt
 from py_trees import common
 
 import BTAlone
-import AAgent_Python.BNs_SmartRoam as BNs_SmartRoam
+import BNs_SmartRoam
 import Goals_BT_Basic
 import Sensors
 
