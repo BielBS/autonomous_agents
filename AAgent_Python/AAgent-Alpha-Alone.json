@@ -16,6 +16,6 @@
     "ray_perception_sensor_param": [2,45,0,5]
   },
   "Misc": {
-    "python_gui_monitor": true
+    "python_gui_monitor": false
   }
 }
