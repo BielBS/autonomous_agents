@@ -153,8 +153,8 @@ class BTCollectRun:
             center_bias_weight=1.1,
         )
 
-        false_root = pt.composites.Selector(name="Selector", memory=False)
-        false_root.add_children([
+        main_behaviour = pt.composites.Selector(name="Selector", memory=False)
+        main_behaviour.add_children([
             evade_critter,
             store_flowers,
             flower_protocol,
@@ -162,7 +162,7 @@ class BTCollectRun:
         ])
 
         self.root = pt.composites.Selector(name="Selector_root", memory=False)
-        self.root.add_children([frozen, false_root])
+        self.root.add_children([frozen, main_behaviour])
 
         self.behaviour_tree = pt.trees.BehaviourTree(self.root)
 
