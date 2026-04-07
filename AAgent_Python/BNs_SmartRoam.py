@@ -139,7 +139,7 @@ class BN_RoamBackOff(pt.behaviour.Behaviour):
 
         # Move backwards a little to create space before turning away.
         self.my_goal = asyncio.create_task(
-            Goals_BT_Basic.BackwardDist(self.my_agent, random.uniform(0.7, 1.4), 0, 0).run()
+            Goals_BT_Basic.BackwardDist(self.my_agent, random.uniform(0.35, 0.8), 0, 0).run()
         )
 
     def update(self):

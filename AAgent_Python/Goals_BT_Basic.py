@@ -20,6 +20,26 @@ def calculate_distance(point_a, point_b):
     return distance
 
 
+MOVEMENT_BLOCKING_TAGS = {"Wall", "Rock", "Machine", "Location", "Container"}
+
+
+def has_blocking_obstacle_ahead(rc_sensor, max_angle=25.0, stop_distance=1.0):
+    sensor_obj_info = rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO]
+    sensor_angles = rc_sensor.sensor_rays[Sensors.RayCastSensor.ANGLE]
+
+    for index, value in enumerate(sensor_obj_info):
+        if not value:
+            continue
+
+        if abs(sensor_angles[index]) > max_angle:
+            continue
+
+        if value["tag"] in MOVEMENT_BLOCKING_TAGS and value["distance"] <= stop_distance:
+            return True
+
+    return False
+
+
 class DoNothing:
     """
     Does nothing
@@ -88,6 +108,8 @@ class ForwardDist:
     CHECK_INTERVAL = 0.1
     MIN_PROGRESS = 0.02
     MAX_STALLED_CHECKS = 3
+    BLOCKING_ANGLE = 25.0
+    BLOCKING_DISTANCE = 1.0
 
     def __init__(self, a_agent, dist, d_min, d_max):
         self.a_agent = a_agent
@@ -126,6 +148,14 @@ class ForwardDist:
                 elif self.state == self.MOVING:
                     # If we are moving
                     await asyncio.sleep(self.CHECK_INTERVAL)
+                    if has_blocking_obstacle_ahead(
+                        self.rc_sensor,
+                        max_angle=self.BLOCKING_ANGLE,
+                        stop_distance=self.BLOCKING_DISTANCE,
+                    ):
+                        await self.a_agent.send_message("action", "ntm")
+                        self.state = self.STOPPED
+                        return False
                     self.current_dist += calculate_distance(self.previous_pos, self.i_state.position)
                     self.previous_pos = self.i_state.position
                     #current_dist = calculate_distance(self.starting_pos, self.i_state.position)
