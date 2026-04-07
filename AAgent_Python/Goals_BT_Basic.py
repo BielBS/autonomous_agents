@@ -96,6 +96,8 @@ class ForwardDist:
         self.d_max = d_max
         self.starting_pos = a_agent.i_state.position
         self.state = self.STOPPED
+        self.previous_pos = self.i_state.position
+        self.current_dist = 0
 
     async def run(self):
         try:
@@ -116,20 +118,22 @@ class ForwardDist:
                 elif self.state == self.MOVING:
                     # If we are moving
                     await asyncio.sleep(0.5)  # Wait for a little movement
-                    current_dist = calculate_distance(self.starting_pos, self.i_state.position)
+                    self.current_dist += calculate_distance(self.previous_pos, self.i_state.position)
+                    self.previous_pos = self.i_state.position
+                    #current_dist = calculate_distance(self.starting_pos, self.i_state.position)
                     #print(f"Current distance: {current_dist}")
-                    if current_dist >= self.target_dist:  # Check if we already have covered the required distance
+                    if self.current_dist >= self.target_dist:  # Check if we already have covered the required distance
                         await self.a_agent.send_message("action", "ntm")
                         self.state = self.STOPPED
                         # print("DESTINATION REACHED")
                         return True
-                    elif previous_dist == current_dist:  # We are not moving
+                    elif previous_dist == self.current_dist:  # We are not moving
                         # print(f"previous dist: {previous_dist}, current dist: {current_dist}")
                         # print("NOT MOVING")
                         await self.a_agent.send_message("action", "ntm")
                         self.state = self.STOPPED
                         return False
-                    previous_dist = current_dist
+                    previous_dist = self.current_dist
                 else:
                     print("Unknown state: " + str(self.state))
                     return False
@@ -165,6 +169,8 @@ class BackwardDist:
         self.d_max = d_max
         self.starting_pos = a_agent.i_state.position
         self.state = self.STOPPED
+        self.previous_pos = self.i_state.position
+        self.current_dist = 0
 
     async def run(self):
         try:
@@ -180,16 +186,17 @@ class BackwardDist:
                     self.state = self.MOVING
                 elif self.state == self.MOVING:
                     await asyncio.sleep(0.25)
-                    current_dist = calculate_distance(self.starting_pos, self.i_state.position)
-                    if current_dist >= self.target_dist:
+                    self.current_dist += calculate_distance(self.previous_pos, self.i_state.position)
+                    self.previous_pos = self.i_state.position
+                    if self.current_dist >= self.target_dist:
                         await self.a_agent.send_message("action", "ntm")
                         self.state = self.STOPPED
                         return True
-                    elif previous_dist == current_dist:
+                    elif previous_dist == self.current_dist:
                         await self.a_agent.send_message("action", "ntm")
                         self.state = self.STOPPED
                         return False
-                    previous_dist = current_dist
+                    previous_dist = self.current_dist
                 else:
                     print("Unknown state: " + str(self.state))
                     return False

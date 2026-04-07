@@ -13,7 +13,7 @@ import Sensors
 
 
 ASTRONAUT_TAG_FRAGMENTS = ("Astronaut",)
-CHASE_IMPASSABLE_TAGS = {"Wall", "Rock", "Machine", "AlienFlower"}
+CHASE_IMPASSABLE_TAGS = {"Wall", "Rock", "Machine", "Location", "AlienFlower"}
 
 
 def is_target_tag(tag, target_fragments):
@@ -329,7 +329,7 @@ class BTCritter:
             BN_StartRetreat(self.memory),
         ])
 
-        engage = pt.composites.Sequence(name="EngageAstronaut", memory=True)
+        engage = pt.composites.Sequence(name="EngageAstronaut", memory=False) #this was previously True
         engage.add_children([
             BN_DetectAstronaut(aagent, self.memory),
             pt.composites.Selector(name="AttackOrChase", memory=False, children=[
