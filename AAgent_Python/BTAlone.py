@@ -1,5 +1,4 @@
 import asyncio
-import random
 import py_trees as pt
 from py_trees import common
 import Goals_BT_Basic
@@ -35,12 +34,6 @@ class BN_DoNothing(pt.behaviour.Behaviour):
             self.my_goal.cancel()
 
 
-class AloneRecoveryMemory:
-    def __init__(self):
-        self.was_frozen = False
-        self.pending_recovery = False
-
-
 class BN_DetectFrozen(pt.behaviour.Behaviour):
     def __init__(self, aagent):
         self.my_goal = None
@@ -61,66 +54,6 @@ class BN_DetectFrozen(pt.behaviour.Behaviour):
         pass
 
 
-class BN_ShouldRecoverAfterFreeze(pt.behaviour.Behaviour):
-    def __init__(self, memory):
-        super(BN_ShouldRecoverAfterFreeze, self).__init__("BN_ShouldRecoverAfterFreeze")
-        self.memory = memory
-
-    def initialise(self):
-        pass
-
-    def update(self):
-        if self.memory.pending_recovery:
-            self.memory.pending_recovery = False
-            return pt.common.Status.SUCCESS
-        return pt.common.Status.FAILURE
-
-    def terminate(self, new_status: common.Status):
-        pass
-
-
-class BN_ForcedRecoverAfterHit(pt.behaviour.Behaviour):
-    def __init__(self, aagent):
-        super(BN_ForcedRecoverAfterHit, self).__init__("BN_ForcedRecoverAfterHit")
-        self.my_agent = aagent
-        self.my_goal = None
-
-    async def _run_recovery(self):
-        await self.my_agent.send_message("action", "stop")
-        await asyncio.sleep(0)
-
-        backed_off = await Goals_BT_Basic.BackwardDist(
-            self.my_agent,
-            random.uniform(1.0, 1.8),
-            0,
-            0,
-        ).run()
-
-        turned = await Goals_BT_Basic.Turn_customizable(
-            self.my_agent,
-            0,
-            random.choice([-1, 1]) * random.uniform(120, 165),
-        ).run()
-        if not turned:
-            return False
-
-        escaped = await Goals_BT_Basic.ForwardDist(
-            self.my_agent,
-            random.uniform(3.5, 5.0),
-            0,
-            0,
-        ).run()
-        return bool(backed_off or escaped)
-
-    def initialise(self):
-        self.my_goal = asyncio.create_task(self._run_recovery())
-
-    def update(self):
-        return common_goal_update(self.my_goal)
-
-    def terminate(self, new_status: common.Status):
-        if self.my_goal != None:
-            self.my_goal.cancel()
 #### Return To Base BNs #####
 
 class BN_IsInBaseNearContainer(pt.behaviour.Behaviour):
@@ -414,18 +347,11 @@ class BTAlone:
         # py_trees.logging.level = py_trees.logging.Level.DEBUG
 
         self.aagent = aagent
-        self.recovery_memory = AloneRecoveryMemory()
 
         frozen = pt.composites.Sequence(name="Sequence_frozen", memory=True)
         frozen.add_children([
             BN_DetectFrozen(aagent),
             BN_DoNothing(aagent),
-        ])
-
-        recover_from_hit = pt.composites.Sequence(name="RecoverFromHit", memory=True)
-        recover_from_hit.add_children([
-            BN_ShouldRecoverAfterFreeze(self.recovery_memory),
-            BN_ForcedRecoverAfterHit(aagent),
         ])
 
         
@@ -462,7 +388,6 @@ class BTAlone:
 
         false_root = pt.composites.Selector(name="Selector", memory=False)
         false_root.add_children([
-                                    recover_from_hit,
                                     store_flowers,
                                     flower_protocol,
                                     smart_roaming
@@ -486,9 +411,5 @@ class BTAlone:
                     node.terminate(pt.common.Status.INVALID)
 
     async def tick(self):
-        if self.recovery_memory.was_frozen and not self.aagent.i_state.isFrozen:
-            self.recovery_memory.pending_recovery = True
-
-        self.recovery_memory.was_frozen = bool(self.aagent.i_state.isFrozen)
         self.behaviour_tree.tick()
         await asyncio.sleep(0)
