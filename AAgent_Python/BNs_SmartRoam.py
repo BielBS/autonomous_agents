@@ -134,10 +134,14 @@ def choose_roam_angle(aagent, memory):
     if inward_turn is not None:
         return inward_turn
 
+    front_cone_clearance = _get_front_cone_clearance(aagent, memory)
+    if front_cone_clearance <= max(0.9, memory.front_blocked_distance * 0.8):
+        return _choose_escape_angle(aagent, memory)
+
     if (
         memory.escape_on_front_blocked
         and memory.consecutive_failures > 0
-        and _get_front_cone_clearance(aagent, memory) <= memory.front_blocked_distance
+        and front_cone_clearance <= memory.front_blocked_distance
     ):
         return _choose_escape_angle(aagent, memory)
 
@@ -166,6 +170,7 @@ def choose_roam_angle(aagent, memory):
 
 def choose_roam_distance(aagent, memory):
     front_ray = aagent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO][aagent.rc_sensor.central_ray_index]
+    front_cone_clearance = _get_front_cone_clearance(aagent, memory)
     if memory.consecutive_failures > 0:
         target_distance = random.uniform(1.5, 3.0)
     else:
@@ -179,6 +184,9 @@ def choose_roam_distance(aagent, memory):
 
     if _is_impassable(front_ray, memory):
         target_distance = min(target_distance, front_ray["distance"] - 0.75)
+
+    if front_cone_clearance < aagent.rc_sensor.ray_length:
+        target_distance = min(target_distance, front_cone_clearance - 0.75)
 
     return max(0.0, target_distance)
 
