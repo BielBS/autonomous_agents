@@ -169,7 +169,7 @@ class BTCritter:
         smart_roaming = BNs_SmartRoam.create_roaming_subtree(
             aagent,
             name="SmartRoaming",
-            extra_impassable_tags={"AlienFlower"},
+            extra_impassable_tags={"AlienFlower", "Location", "Container"},
             use_reverse_escape=True,
             escape_on_front_blocked=True,
             front_blocked_distance=1.6,
