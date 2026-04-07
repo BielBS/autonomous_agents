@@ -218,12 +218,11 @@ class BN_ReturnToBase(pt.behaviour.Behaviour):
         self.my_goal= asyncio.create_task(Goals_BT_Basic.Walk_To(self.my_agent,chosen_base).run())
 
     def update(self) -> pt.common.Status:
-        #TODO remove temp
-        temp= common_goal_update(self.my_goal)
-        if temp!= self.debug_current_state:
-            self.debug_current_state=temp
-            print("Return To Base:",temp)
-        return temp
+        goal_status= common_goal_update(self.my_goal)
+        #if goal_status!= self.debug_current_state:
+        #    self.debug_current_state=goal_status
+        #    print("Return To Base:",goal_status)
+        return goal_status
     
     def terminate(self, new_status: common.Status) -> None:
         print("Terminate ReturnToBase:",new_status)
@@ -285,12 +284,11 @@ class BN_DropOffFlowers(pt.behaviour.Behaviour):
         self.my_goal=asyncio.create_task(Goals_BT_Basic.Drop_Off_Flowers(self.my_agent,2).run())
 
     def update(self) -> common.Status:
-        #TODO remove temp
-        temp= common_goal_update(self.my_goal)
-        if temp!= self.debug_current_state:
-            self.debug_current_state=temp
-            print("Drop Off Flowers:",temp)
-        return temp
+        goal_status= common_goal_update(self.my_goal)
+        #if goal_status!= self.debug_current_state:
+        #    self.debug_current_state=goal_status
+        #    print("Drop Off Flowers:",goal_status)
+        return goal_status
 
     def terminate(self, new_status: common.Status) -> None:
         print("Terminate DropOffFlowers")
@@ -392,12 +390,11 @@ class BN_MoveToFlower(pt.behaviour.Behaviour):
             )
 
     def update(self):
-        #TODO remove temp
-        temp= common_goal_update(self.my_goal)
-        if temp!= self.debug_current_state:
-            self.debug_current_state=temp
-            print("Move To Flower:",temp)
-        return temp
+        goal_status= common_goal_update(self.my_goal)
+        #if goal_status!= self.debug_current_state:
+        #    self.debug_current_state=goal_status
+        #    print("Move To Flower:",goal_status)
+        return goal_status
 
 
     def terminate(self, new_status: common.Status):
