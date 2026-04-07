@@ -7,11 +7,11 @@ import json
 import Sensors
 import Goals_BT_Basic
 import BTRoam
-#------------------------------ CUSTOM CODE —------------
+#------------------------------ CUSTOM CODE --------------
 import BTAlone
 import BTCollectRun
 import BTCritter
-#------------------------------ CUSTOM CODE —------------
+#------------------------------ CUSTOM CODE --------------
 
 import tkinter as tk
 from threading import Thread
@@ -137,7 +137,7 @@ class AAgent:
         # Extract the parameters of the agent from the config dictionary
         self.AgentParameters = self.config['AgentParameters']
         self.python_gui_monitor = self.config['Misc']['python_gui_monitor']
-        #------------------------------ CUSTOM CODE —------------
+        #------------------------------ CUSTOM CODE --------------
         self.initial_task = self.AgentParameters.get("initial_task", "").strip()
         #--------------------------------------------------------
 
@@ -172,7 +172,7 @@ class AAgent:
         # Reference to the possible behaviour trees the agent can execute
         self.bts = {
             "BTRoam": BTRoam.BTRoam(self),
-            #------------------------------ CUSTOM CODE —------------
+            #------------------------------ CUSTOM CODE --------------
             "BTAlone": BTAlone.BTAlone(self),
             "BTCollectRun": BTCollectRun.BTCollectRun(self),
             "BTCritter": BTCritter.BTCritter(self),
@@ -189,11 +189,11 @@ class AAgent:
         # Individual actions pending execution
         self.pendingActions = deque()
 
-        #------------------------------ CUSTOM CODE —------------
+        #------------------------------ CUSTOM CODE --------------
         self._load_initial_task()
         #--------------------------------------------------------
 
-    #------------------------------ CUSTOM CODE —------------
+    #------------------------------ CUSTOM CODE --------------
     def _load_initial_task(self):
         """
         Loads the task declared in the agent config so it starts automatically
@@ -254,15 +254,15 @@ class AAgent:
         """
         msg = {"type": msg_type, "content": msg_content}
         msg_json = json.dumps(msg)
-        # if msg_type == "action":
-        #     print(msg_content)
-        #------------------------------ CUSTOM CODE —------------
+        if msg_type == "action":
+             print(msg_content)
+        #------------------------------ CUSTOM CODE --------------
         if self.ws is None or self.ws.closed:
             return
         try:
         #--------------------------------------------------------
             await self.ws.send_str(msg_json)
-        #------------------------------ CUSTOM CODE —------------
+        #------------------------------ CUSTOM CODE --------------
         except (aiohttp.ClientConnectionError, ConnectionResetError, RuntimeError):
             # The websocket can be closing while cancelled tasks try to send a final stop/turn action.
             return

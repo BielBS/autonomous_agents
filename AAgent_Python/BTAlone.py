@@ -41,42 +41,21 @@ class AloneRecoveryMemory:
         self.pending_recovery = False
 
 
-class BN_DetectFrozenState(pt.behaviour.Behaviour):
-    def __init__(self, aagent, memory):
-        super(BN_DetectFrozenState, self).__init__("BN_DetectFrozenState")
-        self.my_agent = aagent
-        self.memory = memory
-
-    def initialise(self):
-        pass
-
-    def update(self):
-        if self.my_agent.i_state.isFrozen:
-            self.memory.was_frozen = True
-            return pt.common.Status.SUCCESS
-
-        if self.memory.was_frozen:
-            self.memory.was_frozen = False
-            self.memory.pending_recovery = True
-
-        return pt.common.Status.FAILURE
-
-    def terminate(self, new_status: common.Status):
-        pass
-
-
-class BN_WaitUntilThawed(pt.behaviour.Behaviour):
+class BN_DetectFrozen(pt.behaviour.Behaviour):
     def __init__(self, aagent):
-        super(BN_WaitUntilThawed, self).__init__("BN_WaitUntilThawed")
+        self.my_goal = None
+        # print("Initializing BN_DetectInventoryFull")
+        super(BN_DetectFrozen, self).__init__("BN_DetectFrozen")
         self.my_agent = aagent
+        self.i_state = aagent.i_state
 
     def initialise(self):
-        asyncio.create_task(self.my_agent.send_message("action", "stop"))
+        pass
 
     def update(self):
-        if self.my_agent.i_state.isFrozen:
-            return pt.common.Status.RUNNING
-        return pt.common.Status.SUCCESS
+        if self.i_state.isFrozen:
+            return pt.common.Status.SUCCESS
+        return pt.common.Status.FAILURE
 
     def terminate(self, new_status: common.Status):
         pass
@@ -437,10 +416,10 @@ class BTAlone:
         self.aagent = aagent
         self.recovery_memory = AloneRecoveryMemory()
 
-        frozen = pt.composites.Sequence(name="DetectFrozen", memory=True)
+        frozen = pt.composites.Sequence(name="Sequence_frozen", memory=True)
         frozen.add_children([
-            BN_DetectFrozenState(aagent, self.recovery_memory),
-            BN_WaitUntilThawed(aagent),
+            BN_DetectFrozen(aagent),
+            BN_DoNothing(aagent),
         ])
 
         recover_from_hit = pt.composites.Sequence(name="RecoverFromHit", memory=True)
@@ -483,16 +462,14 @@ class BTAlone:
 
         false_root = pt.composites.Selector(name="Selector", memory=False)
         false_root.add_children([
+                                    recover_from_hit,
                                     store_flowers,
                                     flower_protocol,
                                     smart_roaming
                                     ])
-        
-        
-        
 
-        self.root = pt.composites.Selector(name="Selector", memory=False)
-        self.root.add_children([frozen, recover_from_hit, false_root])
+        self.root = pt.composites.Selector(name="Selector_root", memory=False)
+        self.root.add_children([frozen, false_root])
 
 
         self.behaviour_tree = pt.trees.BehaviourTree(self.root)
@@ -509,5 +486,9 @@ class BTAlone:
                     node.terminate(pt.common.Status.INVALID)
 
     async def tick(self):
+        if self.recovery_memory.was_frozen and not self.aagent.i_state.isFrozen:
+            self.recovery_memory.pending_recovery = True
+
+        self.recovery_memory.was_frozen = bool(self.aagent.i_state.isFrozen)
         self.behaviour_tree.tick()
         await asyncio.sleep(0)

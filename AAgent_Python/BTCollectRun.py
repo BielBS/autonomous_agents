@@ -14,7 +14,6 @@ class BN_DetectNearbyCritter(pt.behaviour.Behaviour):
     DANGER_DISTANCE = 6.0
 
     def __init__(self, aagent):
-        self.my_goal = None
         super(BN_DetectNearbyCritter, self).__init__("BN_DetectNearbyCritter")
         self.my_agent = aagent
 
@@ -112,9 +111,11 @@ class BN_ForcedRecoverAfterHit(pt.behaviour.Behaviour):
         self.my_agent = aagent
 
     async def recover(self, critter_angle):
+        # The astronaut has just thawed, so first stop any previous movement.
         await self.my_agent.send_message("action", "stop")
         await asyncio.sleep(0)
 
+        # Step 1: create a small gap.
         backed_off = await Goals_BT_Basic.BackwardDist(
             self.my_agent,
             random.uniform(1.0, 1.8),
@@ -122,6 +123,7 @@ class BN_ForcedRecoverAfterHit(pt.behaviour.Behaviour):
             0,
         ).run()
 
+        # Step 2: turn away from the critter.
         if abs(critter_angle) < 12:
             escape_turn = random.choice([-1, 1]) * random.uniform(120, 165)
         elif critter_angle > 0:
@@ -133,6 +135,7 @@ class BN_ForcedRecoverAfterHit(pt.behaviour.Behaviour):
         if not turned:
             return False
 
+        # Step 3: run forward to leave the danger area.
         escaped = await Goals_BT_Basic.ForwardDist(
             self.my_agent,
             random.uniform(4.0, 5.5),
@@ -145,17 +148,17 @@ class BN_ForcedRecoverAfterHit(pt.behaviour.Behaviour):
         sensor_obj_info = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO]
         sensor_angles = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.ANGLE]
 
-        closest_distance = None
-        closest_angle = 0.0
+        nearest_critter_distance = None
+        critter_angle = 0.0
 
         for index, value in enumerate(sensor_obj_info):
             if value:
                 if "Critter" in value["tag"]:
-                    if closest_distance is None or value["distance"] < closest_distance:
-                        closest_distance = value["distance"]
-                        closest_angle = sensor_angles[index]
+                    if nearest_critter_distance is None or value["distance"] < nearest_critter_distance:
+                        nearest_critter_distance = value["distance"]
+                        critter_angle = sensor_angles[index]
 
-        self.my_goal = asyncio.create_task(self.recover(closest_angle))
+        self.my_goal = asyncio.create_task(self.recover(critter_angle))
 
     def update(self):
         if not self.my_goal.done():
@@ -176,10 +179,17 @@ class BTCollectRun:
         self.aagent = aagent
         self.recovery_memory = BTAlone.AloneRecoveryMemory()
 
-        frozen = pt.composites.Sequence(name="DetectFrozen", memory=True)
+        # Priority order:
+        # 1. If frozen, wait until the critter releases the astronaut.
+        # 2. If just thawed, run away to avoid getting hit again.
+        # 3. If a critter is nearby, evade it.
+        # 4. If the inventory is full, return flowers to base.
+        # 5. If a flower is visible, collect it.
+        # 6. Otherwise roam.
+        frozen = pt.composites.Sequence(name="Sequence_frozen", memory=True)
         frozen.add_children([
-            BTAlone.BN_DetectFrozenState(aagent, self.recovery_memory),
-            BTAlone.BN_WaitUntilThawed(aagent),
+            BTAlone.BN_DetectFrozen(aagent),
+            BTAlone.BN_DoNothing(aagent),
         ])
 
         recover_from_hit = pt.composites.Sequence(name="RecoverFromHit", memory=True)
@@ -223,14 +233,15 @@ class BTCollectRun:
 
         false_root = pt.composites.Selector(name="Selector", memory=False)
         false_root.add_children([
+            recover_from_hit,
             evade_critter,
             store_flowers,
             flower_protocol,
             smart_roaming,
         ])
 
-        self.root = pt.composites.Selector(name="Selector", memory=False)
-        self.root.add_children([frozen, recover_from_hit, false_root])
+        self.root = pt.composites.Selector(name="Selector_root", memory=False)
+        self.root.add_children([frozen, false_root])
 
         self.behaviour_tree = pt.trees.BehaviourTree(self.root)
 
@@ -245,5 +256,9 @@ class BTCollectRun:
                     node.terminate(pt.common.Status.INVALID)
 
     async def tick(self):
+        if self.recovery_memory.was_frozen and not self.aagent.i_state.isFrozen:
+            self.recovery_memory.pending_recovery = True
+
+        self.recovery_memory.was_frozen = bool(self.aagent.i_state.isFrozen)
         self.behaviour_tree.tick()
         await asyncio.sleep(0)

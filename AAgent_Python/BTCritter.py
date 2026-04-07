@@ -9,25 +9,8 @@ import Goals_BT_Basic
 import Sensors
 
 
-def get_astronaut(aagent):
-    sensor_obj_info = aagent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO]
-    sensor_angles = aagent.rc_sensor.sensor_rays[Sensors.RayCastSensor.ANGLE]
-
-    for index, value in enumerate(sensor_obj_info):
-        if value:
-            if "Astronaut" in value["tag"]:
-                return {
-                    "distance": value["distance"],
-                    "angle": sensor_angles[index],
-                    "index": index,
-                }
-
-    return None
-
-
 class BN_DetectAstronaut(pt.behaviour.Behaviour):
     def __init__(self, aagent):
-        self.my_goal = None
         super(BN_DetectAstronaut, self).__init__("BN_DetectAstronaut")
         self.my_agent = aagent
 
@@ -35,8 +18,13 @@ class BN_DetectAstronaut(pt.behaviour.Behaviour):
         pass
 
     def update(self):
-        if get_astronaut(self.my_agent):
-            return pt.common.Status.SUCCESS
+        sensor_obj_info = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO]
+
+        for value in sensor_obj_info:
+            if value:
+                if "Astronaut" in value["tag"]:
+                    return pt.common.Status.SUCCESS
+
         return pt.common.Status.FAILURE
 
     def terminate(self, new_status: common.Status):
@@ -48,7 +36,6 @@ class BN_CanTouchAstronaut(pt.behaviour.Behaviour):
     TOUCH_ANGLE = 18.0
 
     def __init__(self, aagent):
-        self.my_goal = None
         super(BN_CanTouchAstronaut, self).__init__("BN_CanTouchAstronaut")
         self.my_agent = aagent
 
@@ -56,12 +43,15 @@ class BN_CanTouchAstronaut(pt.behaviour.Behaviour):
         pass
 
     def update(self):
-        astronaut = get_astronaut(self.my_agent)
-        if astronaut is None:
-            return pt.common.Status.FAILURE
+        sensor_obj_info = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO]
+        sensor_angles = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.ANGLE]
 
-        if astronaut["distance"] <= self.TOUCH_DISTANCE and abs(astronaut["angle"]) <= self.TOUCH_ANGLE:
-            return pt.common.Status.SUCCESS
+        for index, value in enumerate(sensor_obj_info):
+            if value:
+                if "Astronaut" in value["tag"]:
+                    if value["distance"] <= self.TOUCH_DISTANCE and abs(sensor_angles[index]) <= self.TOUCH_ANGLE:
+                        return pt.common.Status.SUCCESS
+
         return pt.common.Status.FAILURE
 
     def terminate(self, new_status: common.Status):
@@ -75,18 +65,33 @@ class BN_MoveToAstronaut(pt.behaviour.Behaviour):
         self.my_agent = aagent
 
     def initialise(self):
-        astronaut = get_astronaut(self.my_agent)
+        sensor_obj_info = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO]
+        sensor_angles = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.ANGLE]
         central_ray_index = self.my_agent.rc_sensor.central_ray_index
 
-        if astronaut is None:
+        astronaut_distance = None
+        astronaut_angle = 0.0
+        astronaut_is_centered = False
+
+        for index, value in enumerate(sensor_obj_info):
+            if value:
+                if "Astronaut" in value["tag"]:
+                    astronaut_distance = value["distance"]
+                    astronaut_angle = sensor_angles[index]
+                    astronaut_is_centered = index == central_ray_index
+                    break
+
+        # If the astronaut is straight ahead, move forward.
+        # Otherwise, turn first until the astronaut is in front of the critter.
+        if astronaut_distance is None:
             self.my_goal = None
-        elif astronaut["index"] == central_ray_index:
+        elif astronaut_is_centered:
             self.my_goal = asyncio.create_task(
-                Goals_BT_Basic.ForwardDist(self.my_agent, astronaut["distance"], 0, 5).run()
+                Goals_BT_Basic.ForwardDist(self.my_agent, astronaut_distance, 0, 5).run()
             )
         else:
             self.my_goal = asyncio.create_task(
-                Goals_BT_Basic.Turn_customizable(self.my_agent, 0, astronaut["angle"]).run()
+                Goals_BT_Basic.Turn_customizable(self.my_agent, 0, astronaut_angle).run()
             )
 
     def update(self):
@@ -95,11 +100,10 @@ class BN_MoveToAstronaut(pt.behaviour.Behaviour):
 
         if not self.my_goal.done():
             return pt.common.Status.RUNNING
-        else:
-            if self.my_goal.result():
-                return pt.common.Status.SUCCESS
-            else:
-                return pt.common.Status.FAILURE
+
+        if self.my_goal.result():
+            return pt.common.Status.SUCCESS
+        return pt.common.Status.FAILURE
 
     def terminate(self, new_status: common.Status):
         if self.my_goal is not None:
@@ -113,6 +117,7 @@ class BN_RetreatFromAstronaut(pt.behaviour.Behaviour):
         self.my_agent = aagent
 
     async def retreat(self, astronaut_angle):
+        # Step 1: move backward to stop touching the astronaut.
         backed_off = await Goals_BT_Basic.BackwardDist(
             self.my_agent,
             random.uniform(0.8, 1.4),
@@ -120,6 +125,7 @@ class BN_RetreatFromAstronaut(pt.behaviour.Behaviour):
             0,
         ).run()
 
+        # Step 2: turn away from the astronaut.
         if abs(astronaut_angle) < 5:
             retreat_turn = random.choice([-1, 1]) * random.uniform(145, 180)
         elif astronaut_angle > 0:
@@ -127,10 +133,15 @@ class BN_RetreatFromAstronaut(pt.behaviour.Behaviour):
         else:
             retreat_turn = random.uniform(130, 175)
 
-        turned = await Goals_BT_Basic.Turn_customizable(self.my_agent, 0, retreat_turn).run()
+        turned = await Goals_BT_Basic.Turn_customizable(
+            self.my_agent,
+            0,
+            retreat_turn,
+        ).run()
         if not turned:
             return False
 
+        # Step 3: move forward so the critter keeps some distance afterwards.
         escaped = await Goals_BT_Basic.ForwardDist(
             self.my_agent,
             random.uniform(4.5, 6.5),
@@ -140,20 +151,26 @@ class BN_RetreatFromAstronaut(pt.behaviour.Behaviour):
         return bool(backed_off or escaped)
 
     def initialise(self):
-        astronaut = get_astronaut(self.my_agent)
-        if astronaut is None:
-            self.my_goal = asyncio.create_task(self.retreat(0.0))
-        else:
-            self.my_goal = asyncio.create_task(self.retreat(astronaut["angle"]))
+        sensor_obj_info = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO]
+        sensor_angles = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.ANGLE]
+
+        astronaut_angle = 0.0
+
+        for index, value in enumerate(sensor_obj_info):
+            if value:
+                if "Astronaut" in value["tag"]:
+                    astronaut_angle = sensor_angles[index]
+                    break
+
+        self.my_goal = asyncio.create_task(self.retreat(astronaut_angle))
 
     def update(self):
         if not self.my_goal.done():
             return pt.common.Status.RUNNING
-        else:
-            if self.my_goal.result():
-                return pt.common.Status.SUCCESS
-            else:
-                return pt.common.Status.FAILURE
+
+        if self.my_goal.result():
+            return pt.common.Status.SUCCESS
+        return pt.common.Status.FAILURE
 
     def terminate(self, new_status: common.Status):
         if self.my_goal is not None:
@@ -164,19 +181,21 @@ class BTCritter:
     def __init__(self, aagent):
         self.aagent = aagent
 
+        # Priority order:
+        # 1. If the critter is already touching the astronaut, retreat.
+        # 2. If the astronaut is visible but not in touch range, move towards it.
+        # 3. If no astronaut is visible, roam around the map.
         touch_astronaut = pt.composites.Sequence(name="TouchAstronaut", memory=True)
         touch_astronaut.add_children([
+            BN_DetectAstronaut(aagent),
             BN_CanTouchAstronaut(aagent),
             BN_RetreatFromAstronaut(aagent),
         ])
 
-        engage_astronaut = pt.composites.Sequence(name="EngageAstronaut", memory=True)
-        engage_astronaut.add_children([
+        move_to_astronaut = pt.composites.Sequence(name="MoveToAstronaut", memory=True)
+        move_to_astronaut.add_children([
             BN_DetectAstronaut(aagent),
-            pt.composites.Selector(name="TouchOrMove", memory=False, children=[
-                touch_astronaut,
-                BN_MoveToAstronaut(aagent),
-            ]),
+            BN_MoveToAstronaut(aagent),
         ])
 
         smart_roaming = BNs_SmartRoam.create_roaming_subtree(
@@ -193,7 +212,8 @@ class BTCritter:
 
         self.root = pt.composites.Selector(name="Selector", memory=False)
         self.root.add_children([
-            engage_astronaut,
+            touch_astronaut,
+            move_to_astronaut,
             smart_roaming,
         ])
 
