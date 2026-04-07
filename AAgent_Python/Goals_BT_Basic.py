@@ -199,8 +199,7 @@ class BackwardDist:
                 await self.a_agent.send_message("action", "ntm")
             self.state = self.STOPPED
 
-# I have DELETED the given Turn class, the Turn_customizable class is it's replacement it does the same thing but instead of using random values it uses given ones
-# to recreate the previous class simply create a Turn_customaizable(a_agent,random.choice([-1,1]),random.uniform(1,180))
+
 ########## New Goals from here downward #########
 
 class Turn_customizable:
