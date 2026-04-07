@@ -118,31 +118,52 @@ class BN_DetectFlower(pt.behaviour.Behaviour):
         pass
 
 
+class BN_DetectFrozen(pt.behaviour.Behaviour): 
+    
+    def __init__(self, aagent): 
+        self.my_goal = None 
+        # print("Initializing BN_DetectInventoryFull")
+        super(BN_DetectFrozen, self).__init__("BN_DetectFrozen") 
+        self.my_agent = aagent 
+        self.i_state = aagent.i_state 
+
+    def initialise(self): 
+        pass 
+    def update(self): 
+        if self.i_state.isFrozen: 
+            return pt.common.Status.SUCCESS 
+        return pt.common.Status.FAILURE 
+    def terminate(self, new_status: common.Status): 
+        pass
+
+from BTAlone import BN_IsInBaseNearContainer, BN_ReturnToBase, BN_CheckInventory, BN_DropOffFlowers
 class BTRoam:
     def __init__(self, aagent):
-        # py_trees.logging.level = py_trees.logging.Level.DEBUG
-
         self.aagent = aagent
 
-        # VERSION 1
-        # self.root = pt.composites.Sequence(name="Sequence", memory=True)
-        # self.root.add_children([BN_TurnRandom(aagent),
-        #                         BN_ForwardRandom(aagent),
-        #                         BN_DoNothing(aagent)])
-
-        # VERSION 2
-        # self.root = pt.composites.Parallel("Parallel", policy=py_trees.common.ParallelPolicy.SuccessOnAll())
-        # self.root.add_children([BN_ForwardRandom(aagent), BN_TurnRandom(aagent)])
-
-        # VERSION 3 (with DetectFlower)
-        detection = pt.composites.Sequence(name="DetectFlower", memory=True)
-        detection.add_children([BN_DetectFlower(aagent), BN_DoNothing(aagent)])
 
         roaming = pt.composites.Parallel("Parallel", policy=py_trees.common.ParallelPolicy.SuccessOnAll())
         roaming.add_children([BN_ForwardRandom(aagent), BN_TurnRandom(aagent)])
 
+        return_to_base=pt.composites.Selector(name="ReturnToBase",memory=False)
+        return_to_base.add_children([
+                                        BN_IsInBaseNearContainer(aagent),
+                                        BN_ReturnToBase(aagent)
+        ])
+
+        store_flowers= pt.composites.Sequence(name="StoreFlowers",memory=True) 
+        store_flowers.add_children([
+                                        BN_CheckInventory(aagent),
+                                        return_to_base,
+                                        BN_DropOffFlowers(aagent),
+                                     ])
+
+        frozen = pt.composites.Selector(name="DetectFrozen",memory=False)
+        frozen.add_children([BN_DetectFrozen(aagent),BN_DoNothing(aagent)])
+
+
         self.root = pt.composites.Selector(name="Selector", memory=False)
-        self.root.add_children([detection, roaming])
+        self.root.add_children([frozen,store_flowers,roaming])
 
 
         self.behaviour_tree = pt.trees.BehaviourTree(self.root)
