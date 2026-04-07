@@ -106,6 +106,8 @@ class ForwardDist:
                 if self.state == self.STOPPED:
                     # starting position before moving
                     self.starting_pos = self.a_agent.i_state.position
+                    self.previous_pos = self.i_state.position
+                    self.current_dist = 0
                     # Before start moving, calculate the distance we want to move
                     if self.original_dist < 0:
                         self.target_dist = random.randint(self.d_min, self.d_max)
@@ -178,6 +180,8 @@ class BackwardDist:
             while True:
                 if self.state == self.STOPPED:
                     self.starting_pos = self.a_agent.i_state.position
+                    self.previous_pos = self.i_state.position
+                    self.current_dist = 0
                     if self.original_dist < 0:
                         self.target_dist = random.uniform(self.d_min, self.d_max)
                     else:

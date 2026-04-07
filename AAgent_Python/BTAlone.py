@@ -155,12 +155,12 @@ class BN_CheckInventory(pt.behaviour.Behaviour):
     """
     def __init__(self, aagent):
         self.my_goal = None
-        super(BN_CheckInventory, self).__init__("BN_MoveForward")
+        super(BN_CheckInventory, self).__init__("BN_CheckInventory")
         self.my_agent = aagent
         # At what amount of flowers should the agent return to base
         self.return_threshold=2
 
-    def initialize(self):
+    def initialise(self):
         pass
 
     def update(self) -> pt.common.Status:
