@@ -11,7 +11,6 @@ import Sensors
 
 class BN_CanTouchAstronaut(pt.behaviour.Behaviour):
     TOUCH_DISTANCE = 0.6
-    TOUCH_ANGLE = 18.0
 
     def __init__(self, aagent):
         super(BN_CanTouchAstronaut, self).__init__("BN_CanTouchAstronaut")
@@ -22,14 +21,12 @@ class BN_CanTouchAstronaut(pt.behaviour.Behaviour):
 
     def update(self):
         sensor_obj_info = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO]
-        sensor_angles = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.ANGLE]
 
-        for index, value in enumerate(sensor_obj_info):
+        for value in sensor_obj_info:
             if (
                 value
                 and "Astronaut" in value["tag"]
                 and value["distance"] <= self.TOUCH_DISTANCE
-                and abs(sensor_angles[index]) <= self.TOUCH_ANGLE
             ):
                 return pt.common.Status.SUCCESS
 
@@ -40,6 +37,9 @@ class BN_CanTouchAstronaut(pt.behaviour.Behaviour):
 
 
 class BN_MoveToAstronaut(pt.behaviour.Behaviour):
+    MOVE_ANGLE = 20.0
+    MAX_FORWARD_STEP = 2.5
+
     def __init__(self, aagent):
         self.my_goal = None
         super(BN_MoveToAstronaut, self).__init__("BN_MoveToAstronaut")
@@ -48,17 +48,22 @@ class BN_MoveToAstronaut(pt.behaviour.Behaviour):
     def initialise(self):
         sensor_obj_info = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.OBJECT_INFO]
         sensor_angles = self.my_agent.rc_sensor.sensor_rays[Sensors.RayCastSensor.ANGLE]
-        central_ray_index = self.my_agent.rc_sensor.central_ray_index
 
         for index, value in enumerate(sensor_obj_info):
             if not value or "Astronaut" not in value["tag"]:
                 continue
 
-            # If the astronaut is straight ahead, move forward.
-            # Otherwise, turn first until the astronaut is in front of the critter.
-            if index == central_ray_index:
+            # Keep moving if the astronaut is already roughly in front. This
+            # avoids the left-right jitter caused by demanding the exact center
+            # ray before every forward step.
+            if abs(sensor_angles[index]) <= self.MOVE_ANGLE:
                 self.my_goal = asyncio.create_task(
-                    Goals_BT_Basic.ForwardDist(self.my_agent, value["distance"], 0, 5).run()
+                    Goals_BT_Basic.ForwardDist(
+                        self.my_agent,
+                        min(value["distance"], self.MAX_FORWARD_STEP),
+                        0,
+                        0,
+                    ).run()
                 )
             else:
                 self.my_goal = asyncio.create_task(

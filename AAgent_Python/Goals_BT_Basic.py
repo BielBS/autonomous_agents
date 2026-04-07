@@ -85,6 +85,9 @@ class ForwardDist:
     STOPPED = 0
     MOVING = 1
     END = 2
+    CHECK_INTERVAL = 0.1
+    MIN_PROGRESS = 0.02
+    MAX_STALLED_CHECKS = 3
 
     def __init__(self, a_agent, dist, d_min, d_max):
         self.a_agent = a_agent
@@ -101,13 +104,16 @@ class ForwardDist:
 
     async def run(self):
         try:
-            previous_dist = 0.0  # Used to detect if we are stuck
+            previous_dist = 0.0
+            stalled_checks = 0
             while True:
                 if self.state == self.STOPPED:
                     # starting position before moving
                     self.starting_pos = self.a_agent.i_state.position
                     self.previous_pos = self.i_state.position
                     self.current_dist = 0
+                    previous_dist = 0.0
+                    stalled_checks = 0
                     # Before start moving, calculate the distance we want to move
                     if self.original_dist < 0:
                         self.target_dist = random.randint(self.d_min, self.d_max)
@@ -119,7 +125,7 @@ class ForwardDist:
                     # print("TARGET DISTANCE: " + str(self.target_dist))
                 elif self.state == self.MOVING:
                     # If we are moving
-                    await asyncio.sleep(0.5)  # Wait for a little movement
+                    await asyncio.sleep(self.CHECK_INTERVAL)
                     self.current_dist += calculate_distance(self.previous_pos, self.i_state.position)
                     self.previous_pos = self.i_state.position
                     #current_dist = calculate_distance(self.starting_pos, self.i_state.position)
@@ -129,7 +135,12 @@ class ForwardDist:
                         self.state = self.STOPPED
                         # print("DESTINATION REACHED")
                         return True
-                    elif previous_dist == self.current_dist:  # We are not moving
+                    elif self.current_dist - previous_dist <= self.MIN_PROGRESS:
+                        stalled_checks += 1
+                    else:
+                        stalled_checks = 0
+
+                    if stalled_checks >= self.MAX_STALLED_CHECKS:
                         # print(f"previous dist: {previous_dist}, current dist: {current_dist}")
                         # print("NOT MOVING")
                         await self.a_agent.send_message("action", "ntm")
@@ -160,6 +171,9 @@ class BackwardDist:
     """
     STOPPED = 0
     MOVING = 1
+    CHECK_INTERVAL = 0.1
+    MIN_PROGRESS = 0.02
+    MAX_STALLED_CHECKS = 3
 
     def __init__(self, a_agent, dist, d_min, d_max):
         self.a_agent = a_agent
@@ -177,11 +191,14 @@ class BackwardDist:
     async def run(self):
         try:
             previous_dist = 0.0
+            stalled_checks = 0
             while True:
                 if self.state == self.STOPPED:
                     self.starting_pos = self.a_agent.i_state.position
                     self.previous_pos = self.i_state.position
                     self.current_dist = 0
+                    previous_dist = 0.0
+                    stalled_checks = 0
                     if self.original_dist < 0:
                         self.target_dist = random.uniform(self.d_min, self.d_max)
                     else:
@@ -189,14 +206,19 @@ class BackwardDist:
                     await self.a_agent.send_message("action", "mb")
                     self.state = self.MOVING
                 elif self.state == self.MOVING:
-                    await asyncio.sleep(0.25)
+                    await asyncio.sleep(self.CHECK_INTERVAL)
                     self.current_dist += calculate_distance(self.previous_pos, self.i_state.position)
                     self.previous_pos = self.i_state.position
                     if self.current_dist >= self.target_dist:
                         await self.a_agent.send_message("action", "ntm")
                         self.state = self.STOPPED
                         return True
-                    elif previous_dist == self.current_dist:
+                    elif self.current_dist - previous_dist <= self.MIN_PROGRESS:
+                        stalled_checks += 1
+                    else:
+                        stalled_checks = 0
+
+                    if stalled_checks >= self.MAX_STALLED_CHECKS:
                         await self.a_agent.send_message("action", "ntm")
                         self.state = self.STOPPED
                         return False
@@ -247,7 +269,7 @@ class Turn_customizable:
     SELECTING = 0
     TURNING = 1
 
-    TURN_THRESHOLD=10
+    TURN_THRESHOLD=15
 
 
     def __init__(self, a_agent,direction:int,degrees:float):
